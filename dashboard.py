@@ -8,13 +8,25 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 st.set_page_config(page_title="Netflix AI Dashboard", layout="wide")
 
-# ----------- CSS -----------
+# ---------- NETFLIX THEME ----------
 st.markdown("""
 <style>
-body {background-color:#0e1117;}
-h1,h2,h3 {color:#E50914;}
-.stButton>button {background:#E50914;color:white;}
-.hero {
+
+html, body, [class*="css"]  {
+background-color:#0e1117 !important;
+color:white;
+}
+
+h1,h2,h3,h4 {
+color:#E50914;
+}
+
+.stButton>button {
+background:#E50914;
+color:white;
+}
+
+.hero{
 background-image:url("https://images.unsplash.com/photo-1489599849927-2ee91cede3ba");
 background-size:cover;
 padding:120px;
@@ -22,18 +34,25 @@ border-radius:10px;
 text-align:center;
 color:white;
 }
-.hero h1 {font-size:60px;}
-.hero p {font-size:22px;}
+
+.hero h1{
+font-size:60px;
+}
+
+.hero p{
+font-size:22px;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
-# ----------- LOGIN -----------
+# ---------- LOGIN ----------
 if "login" not in st.session_state:
     st.session_state.login=False
 
 if not st.session_state.login:
 
-    st.title("Login to Netflix Dashboard")
+    st.title("Login")
 
     user=st.text_input("Username")
     pwd=st.text_input("Password",type="password")
@@ -48,7 +67,7 @@ if not st.session_state.login:
 
     st.stop()
 
-# ----------- HERO -----------
+# ---------- HERO ----------
 st.markdown("""
 <div class="hero">
 <h1>Unlimited Movies & Data Insights</h1>
@@ -59,22 +78,22 @@ st.markdown("""
 st.title("Netflix Analytics Dashboard")
 st.write("Developed by Omprakash Dwivedi")
 
-# ----------- DATA -----------
+# ---------- LOAD DATA ----------
 try:
     df=pd.read_csv("netflix_titles.csv")
 except:
-    st.error("Dataset missing")
+    st.error("Dataset missing. Add netflix_titles.csv")
     st.stop()
 
-# ----------- APIs -----------
+# ---------- API KEYS ----------
 TMDB_API_KEY="YOUR_TMDB_KEY"
 OMDB_API_KEY="YOUR_OMDB_KEY"
 
-# ----------- WATCHLIST -----------
+# ---------- WATCHLIST ----------
 if "watchlist" not in st.session_state:
     st.session_state.watchlist=[]
 
-# ----------- POSTER FUNCTION -----------
+# ---------- POSTER ----------
 def get_poster(title):
 
     try:
@@ -84,10 +103,11 @@ def get_poster(title):
         poster=data["results"][0]["poster_path"]
 
         return "https://image.tmdb.org/t/p/w500"+poster
+
     except:
         return f"https://picsum.photos/200/300?random={random.randint(1,9999)}"
 
-# ----------- IMDB RATING -----------
+# ---------- RATING ----------
 def get_rating(title):
 
     try:
@@ -98,7 +118,7 @@ def get_rating(title):
     except:
         return "N/A"
 
-# ----------- SIDEBAR FILTERS -----------
+# ---------- SIDEBAR ----------
 st.sidebar.header("Filters")
 
 type_filter=st.sidebar.selectbox(
@@ -118,10 +138,10 @@ filtered=df[
 (df["release_year"]<=year_filter)
 ]
 
-# ----------- SEARCH -----------
+# ---------- SEARCH ----------
 st.subheader("Search Movie")
 
-search=st.text_input("Movie name")
+search=st.text_input("Enter movie name")
 
 if search:
 
@@ -131,19 +151,19 @@ if search:
 
     st.dataframe(result[["title","type","release_year"]])
 
-# ----------- TRENDING ROW -----------
+# ---------- TRENDING ----------
 st.subheader("Trending Now")
 
-movies=df.sample(10)["title"].tolist()
+movies=df.sample(9)["title"].tolist()
 
-cols=st.columns(5)
+cols=st.columns(3)
 
 for i,m in enumerate(movies):
 
     poster=get_poster(m)
     rating=get_rating(m)
 
-    with cols[i%5]:
+    with cols[i%3]:
 
         st.image(poster)
         st.caption(f"{m} ⭐ {rating}")
@@ -151,25 +171,25 @@ for i,m in enumerate(movies):
         if st.button("Add Watchlist",key=m):
             st.session_state.watchlist.append(m)
 
-# ----------- WATCHLIST -----------
+# ---------- WATCHLIST ----------
 st.subheader("Your Watchlist")
 
 if len(st.session_state.watchlist)==0:
 
-    st.write("No movies yet")
+    st.write("No movies added yet")
 
 else:
 
-    cols=st.columns(5)
+    cols=st.columns(3)
 
     for i,m in enumerate(st.session_state.watchlist):
 
         poster=get_poster(m)
         rating=get_rating(m)
 
-        cols[i%5].image(poster,caption=f"{m} ⭐ {rating}")
+        cols[i%3].image(poster,caption=f"{m} ⭐ {rating}")
 
-# ----------- AI RECOMMENDATION -----------
+# ---------- AI RECOMMENDATION ----------
 st.subheader("AI Recommendation")
 
 df["combined"]=df["title"]+df["director"].fillna("")
@@ -192,7 +212,7 @@ if st.button("Recommend Movies"):
 
     scores=sorted(scores,key=lambda x:x[1],reverse=True)[1:6]
 
-    cols=st.columns(5)
+    cols=st.columns(3)
 
     for i,s in enumerate(scores):
 
@@ -202,23 +222,23 @@ if st.button("Recommend Movies"):
 
         trailer=f"https://www.youtube.com/results?search_query={movie}+trailer"
 
-        cols[i].image(poster,caption=f"{movie} ⭐ {rating}")
-        cols[i].link_button("Trailer",trailer)
+        cols[i%3].image(poster,caption=f"{movie} ⭐ {rating}")
+        cols[i%3].link_button("▶ Trailer",trailer)
 
-# ----------- MOVIE ROW -----------
-st.subheader("Popular on Netflix")
+# ---------- POPULAR MOVIES ----------
+st.subheader("Popular Movies")
 
-sample=df.sample(24)["title"].tolist()
+sample=df.sample(12)["title"].tolist()
 
-cols=st.columns(6)
+cols=st.columns(3)
 
 for i,m in enumerate(sample):
 
     poster=get_poster(m)
 
-    cols[i%6].image(poster,caption=m)
+    cols[i%3].image(poster,caption=m)
 
-# ----------- CHARTS -----------
+# ---------- CHARTS ----------
 st.markdown("---")
 st.header("Netflix Data Insights")
 
@@ -231,7 +251,7 @@ st.plotly_chart(country)
 year=px.histogram(df,x="release_year",title="Release Year Distribution")
 st.plotly_chart(year)
 
-# ----------- FOOTER -----------
+# ---------- FOOTER ----------
 st.markdown("---")
 
 st.markdown("""
