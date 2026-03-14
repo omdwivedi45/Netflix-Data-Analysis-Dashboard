@@ -1,139 +1,183 @@
 import streamlit as st
 import pandas as pd
+import requests
 import random
+import plotly.express as px
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 st.set_page_config(page_title="Netflix AI Dashboard", layout="wide")
 
-# ---------- TITLE ----------
-st.title("🎬 Netflix Movies Dashboard")
-
-# ---------- HERO ----------
+# -------- NETFLIX STYLE --------
 st.markdown("""
-### Welcome to Omprakash's Netflix Analytics Dashboard
+<style>
+body {background-color:#0e1117;}
+h1,h2,h3 {color:#E50914;}
+</style>
+""", unsafe_allow_html=True)
+
+# -------- HERO --------
+st.title("🎬 Netflix Analytics Dashboard")
+
+st.markdown("""
+### Welcome to Omprakash's Netflix Analytics Dashboard  
 Explore movies, discover trends, and get AI-based recommendations.
 """)
 
-# ---------- LOAD DATA ----------
+# -------- LOAD DATA --------
 df = pd.read_csv("netflix_titles.csv")
 
-# ---------- SIDEBAR ----------
+# -------- TMDB API --------
+API_KEY = "YOUR_TMDB_API_KEY"
+
+def fetch_poster(movie):
+
+    url=f"https://api.themoviedb.org/3/search/movie?api_key={API_KEY}&query={movie}"
+
+    data=requests.get(url).json()
+
+    try:
+        poster=data["results"][0]["poster_path"]
+        return "https://image.tmdb.org/t/p/w500"+poster
+    except:
+        return "https://via.placeholder.com/200x300"
+
+# -------- SIDEBAR --------
 st.sidebar.header("Filters")
 
 type_filter = st.sidebar.selectbox(
-    "Content Type",
-    df["type"].dropna().unique()
+"Content Type",
+df["type"].dropna().unique()
 )
 
 year_filter = st.sidebar.slider(
-    "Release Year",
-    int(df["release_year"].min()),
-    int(df["release_year"].max()),
-    int(df["release_year"].max())
+"Release Year",
+int(df["release_year"].min()),
+int(df["release_year"].max()),
+2018
 )
 
-filtered_df = df[
-    (df["type"] == type_filter) &
-    (df["release_year"] <= year_filter)
+filtered_df=df[
+(df["type"]==type_filter)&
+(df["release_year"]<=year_filter)
 ]
 
-# ---------- METRICS ----------
-col1, col2, col3 = st.columns(3)
-
-col1.metric("Total Titles", len(df))
-col2.metric("Movies", len(df[df["type"]=="Movie"]))
-col3.metric("TV Shows", len(df[df["type"]=="TV Show"]))
-
-# ---------- ANALYTICS ----------
-st.subheader("📊 Content Distribution")
-st.bar_chart(filtered_df["type"].value_counts())
-
-st.subheader("🌍 Top Countries")
-st.bar_chart(filtered_df["country"].value_counts().head(10))
-
-st.subheader("🎭 Top Genres")
-
-genres = filtered_df["listed_in"].str.split(",").explode()
-st.bar_chart(genres.value_counts().head(10))
-
-# ---------- SEARCH ----------
+# -------- SEARCH --------
 st.subheader("🔎 Search Movie")
 
-search = st.text_input("Enter movie name")
+search=st.text_input("Search movie name")
 
 if search:
-    results = filtered_df[
-        filtered_df["title"].str.contains(search, case=False)
+
+    result=filtered_df[
+    filtered_df["title"].str.contains(search,case=False)
     ]
-    st.write(results[["title","type","country","release_year"]])
 
-# ---------- RECOMMENDATION ----------
-st.subheader("🤖 Movie Recommendation")
+    st.dataframe(result[["title","type","country","release_year"]])
 
-df["combined"] = df["title"] + df["director"].fillna("")
+# -------- TRENDING SECTION --------
+st.subheader("🔥 Trending Movies")
 
-vectorizer = CountVectorizer(stop_words="english")
-matrix = vectorizer.fit_transform(df["combined"])
+trending=df.sample(10)["title"].tolist()
 
-similarity = cosine_similarity(matrix)
+cols=st.columns(5)
 
-movie_list = df["title"].dropna().unique()
+for i,movie in enumerate(trending):
 
-selected_movie = st.selectbox("Choose Movie", movie_list)
+    poster=fetch_poster(movie)
+
+    cols[i%5].image(poster,caption=movie)
+
+# -------- NETFLIX STYLE SCROLLING --------
+st.subheader("🎥 Popular on Netflix")
+
+movies=df.sample(20)["title"].tolist()
+
+scroll_cols=st.columns(10)
+
+for i,m in enumerate(movies):
+
+    poster=fetch_poster(m)
+
+    scroll_cols[i%10].image(poster,caption=m)
+
+# -------- AI RECOMMENDATION --------
+st.subheader("🤖 AI Movie Recommendation")
+
+df["combined"]=df["title"]+df["director"].fillna("")
+
+vectorizer=CountVectorizer(stop_words="english")
+
+matrix=vectorizer.fit_transform(df["combined"])
+
+similarity=cosine_similarity(matrix)
+
+movie_list=df["title"].dropna().unique()
+
+selected=st.selectbox("Choose Movie",movie_list)
 
 if st.button("Recommend"):
 
-    index = df[df["title"] == selected_movie].index[0]
+    index=df[df["title"]==selected].index[0]
 
-    scores = list(enumerate(similarity[index]))
-    scores = sorted(scores, key=lambda x: x[1], reverse=True)[1:6]
+    scores=list(enumerate(similarity[index]))
 
-    st.write("Recommended Movies:")
+    scores=sorted(scores,key=lambda x:x[1],reverse=True)[1:6]
 
-    for i in scores:
-        st.write(df.iloc[i[0]].title)
+    cols=st.columns(5)
 
-# ---------- TRENDING ----------
-st.subheader("🔥 Trending Movies")
+    for i,s in enumerate(scores):
 
-trending = [
-"3 Idiots","Dangal","PK","Andhadhun","Queen",
-"Bajrangi Bhaijaan","Sholay","Lagaan","Drishyam","Barfi"
-]
+        movie=df.iloc[s[0]].title
 
-for movie in trending:
-    st.write("⭐", movie)
+        poster=fetch_poster(movie)
 
-# ---------- MOVIE POSTERS ----------
-st.subheader("🎬 Movie Poster Gallery")
+        cols[i].image(poster,caption=movie)
 
-# sample 500 titles randomly
-sample_movies = df.sample(min(500, len(df)))
+# -------- POSTER GALLERY --------
+st.subheader("🎬 Movie Gallery")
 
-# fake poster generator (random placeholder)
-def get_poster():
-    return f"https://picsum.photos/200/300?random={random.randint(1,10000)}"
+sample=df.sample(40)["title"].tolist()
 
-posters = [get_poster() for _ in range(len(sample_movies))]
+cols=st.columns(8)
 
-movies = sample_movies["title"].tolist()
+for i,m in enumerate(sample):
 
-# pagination
-page = st.slider("Select Page", 1, int(len(posters)/20)+1, 1)
+    poster=fetch_poster(m)
 
-start = (page-1)*20
-end = start+20
+    cols[i%8].image(poster,caption=m)
 
-cols = st.columns(5)
+# -------- CHARTS (BOTTOM) --------
+st.markdown("---")
+st.header("📊 Netflix Analytics")
 
-for i, (poster, name) in enumerate(zip(posters[start:end], movies[start:end])):
-    cols[i % 5].image(poster, caption=name)
+type_chart=px.pie(
+df,
+names="type",
+title="Movies vs TV Shows"
+)
 
-# ---------- FOOTER ----------
+st.plotly_chart(type_chart)
+
+country_chart=px.bar(
+df["country"].value_counts().head(10),
+title="Top Countries"
+)
+
+st.plotly_chart(country_chart)
+
+year_chart=px.histogram(
+df,
+x="release_year",
+title="Release Year Distribution"
+)
+
+st.plotly_chart(year_chart)
+
+# -------- FOOTER --------
 st.markdown("---")
 
 st.markdown("""
-Developed by **Omprakash Dwivedi**  
+### 👨‍💻 Developed by Omprakash Dwivedi  
 B.Tech CSE | Data Analytics & AI Enthusiast
 """)
