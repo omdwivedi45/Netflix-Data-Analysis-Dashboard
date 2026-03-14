@@ -1,18 +1,19 @@
 import streamlit as st
 import pandas as pd
 import requests
-import random
 import plotly.express as px
+import random
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 st.set_page_config(page_title="Netflix AI Dashboard", layout="wide")
 
-# -------- NETFLIX STYLE --------
+# -------- NETFLIX STYLE UI --------
 st.markdown("""
 <style>
 body {background-color:#0e1117;}
 h1,h2,h3 {color:#E50914;}
+.stButton>button {background:#E50914;color:white;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -27,20 +28,28 @@ Explore movies, discover trends, and get AI-based recommendations.
 # -------- LOAD DATA --------
 df = pd.read_csv("netflix_titles.csv")
 
-# -------- TMDB API --------
+# -------- WATCHLIST --------
+if "watchlist" not in st.session_state:
+    st.session_state.watchlist = []
+
+# -------- TMDB POSTER --------
 API_KEY = "YOUR_TMDB_API_KEY"
 
-def fetch_poster(movie):
-
-    url=f"https://api.themoviedb.org/3/search/movie?api_key={API_KEY}&query={movie}"
-
-    data=requests.get(url).json()
+def get_poster(title):
 
     try:
+
+        url=f"https://api.themoviedb.org/3/search/movie?api_key={API_KEY}&query={title}"
+        data=requests.get(url).json()
+
         poster=data["results"][0]["poster_path"]
+
         return "https://image.tmdb.org/t/p/w500"+poster
+
     except:
-        return "https://via.placeholder.com/200x300"
+
+        # fallback image
+        return f"https://picsum.photos/200/300?random={random.randint(1,10000)}"
 
 # -------- SIDEBAR --------
 st.sidebar.header("Filters")
@@ -65,7 +74,7 @@ filtered_df=df[
 # -------- SEARCH --------
 st.subheader("🔎 Search Movie")
 
-search=st.text_input("Search movie name")
+search=st.text_input("Search movie")
 
 if search:
 
@@ -73,33 +82,45 @@ if search:
     filtered_df["title"].str.contains(search,case=False)
     ]
 
-    st.dataframe(result[["title","type","country","release_year"]])
+    st.dataframe(result[["title","type","release_year"]])
 
-# -------- TRENDING SECTION --------
-st.subheader("🔥 Trending Movies")
+# -------- TRENDING CAROUSEL --------
+st.subheader("🔥 Trending Now")
 
-trending=df.sample(10)["title"].tolist()
+movies=df.sample(15)["title"].tolist()
 
 cols=st.columns(5)
 
-for i,movie in enumerate(trending):
-
-    poster=fetch_poster(movie)
-
-    cols[i%5].image(poster,caption=movie)
-
-# -------- NETFLIX STYLE SCROLLING --------
-st.subheader("🎥 Popular on Netflix")
-
-movies=df.sample(20)["title"].tolist()
-
-scroll_cols=st.columns(10)
-
 for i,m in enumerate(movies):
 
-    poster=fetch_poster(m)
+    poster=get_poster(m)
 
-    scroll_cols[i%10].image(poster,caption=m)
+    with cols[i%5]:
+
+        st.image(poster)
+
+        st.caption(m)
+
+        if st.button(f"❤️ Add",key=m):
+
+            st.session_state.watchlist.append(m)
+
+# -------- WATCHLIST --------
+st.subheader("❤️ Your Watchlist")
+
+if len(st.session_state.watchlist)==0:
+
+    st.write("No movies added yet")
+
+else:
+
+    watch_cols=st.columns(5)
+
+    for i,m in enumerate(st.session_state.watchlist):
+
+        poster=get_poster(m)
+
+        watch_cols[i%5].image(poster,caption=m)
 
 # -------- AI RECOMMENDATION --------
 st.subheader("🤖 AI Movie Recommendation")
@@ -124,31 +145,32 @@ if st.button("Recommend"):
 
     scores=sorted(scores,key=lambda x:x[1],reverse=True)[1:6]
 
-    cols=st.columns(5)
+    rec_cols=st.columns(5)
 
     for i,s in enumerate(scores):
 
         movie=df.iloc[s[0]].title
 
-        poster=fetch_poster(movie)
+        poster=get_poster(movie)
 
-        cols[i].image(poster,caption=movie)
+        rec_cols[i].image(poster,caption=movie)
 
-# -------- POSTER GALLERY --------
-st.subheader("🎬 Movie Gallery")
+# -------- MOVIE GALLERY --------
+st.subheader("🎬 Popular Movies")
 
-sample=df.sample(40)["title"].tolist()
+sample=df.sample(30)["title"].tolist()
 
-cols=st.columns(8)
+cols=st.columns(6)
 
 for i,m in enumerate(sample):
 
-    poster=fetch_poster(m)
+    poster=get_poster(m)
 
-    cols[i%8].image(poster,caption=m)
+    cols[i%6].image(poster,caption=m)
 
 # -------- CHARTS (BOTTOM) --------
 st.markdown("---")
+
 st.header("📊 Netflix Analytics")
 
 type_chart=px.pie(
