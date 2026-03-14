@@ -8,7 +8,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 st.set_page_config(page_title="Netflix AI Dashboard", page_icon="🎬", layout="wide")
 
 # =========================
-# CONFIG
+# API KEY
 # =========================
 TMDB_API_KEY = "YOUR_TMDB_KEY"   # <-- apni TMDB key yahan daalo
 
@@ -73,7 +73,7 @@ h1, h2, h3, h4, h5 {
     align-items: center;
 }
 
-.lang-btn, .sign-btn, .start-btn {
+.lang-btn, .sign-btn {
     border: none;
     border-radius: 6px;
     padding: 10px 18px;
@@ -87,53 +87,9 @@ h1, h2, h3, h4, h5 {
     border: 1px solid rgba(255,255,255,0.35);
 }
 
-.sign-btn, .start-btn {
+.sign-btn {
     background: #E50914;
     color: white;
-}
-
-.hero-center {
-    text-align: center;
-    max-width: 900px;
-    margin: 0 auto;
-    padding-bottom: 80px;
-}
-
-.hero-center h1 {
-    font-size: 64px;
-    line-height: 1.05;
-    font-weight: 900;
-    margin-bottom: 18px;
-}
-
-.hero-center h3 {
-    font-size: 28px;
-    font-weight: 500;
-    margin-bottom: 16px;
-}
-
-.hero-center p {
-    font-size: 22px;
-    margin-bottom: 24px;
-}
-
-.email-row {
-    display: flex;
-    justify-content: center;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-
-.fake-input {
-    min-width: 320px;
-    max-width: 460px;
-    width: 100%;
-    background: rgba(20,20,20,0.85);
-    border: 1px solid rgba(255,255,255,0.3);
-    border-radius: 6px;
-    padding: 16px 14px;
-    color: #cfcfcf;
-    font-size: 20px;
 }
 
 .section-box {
@@ -174,15 +130,6 @@ input, textarea {
     .logo {
         font-size: 38px;
     }
-    .hero-center h1 {
-        font-size: 38px;
-    }
-    .hero-center h3 {
-        font-size: 20px;
-    }
-    .hero-center p {
-        font-size: 18px;
-    }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -197,7 +144,7 @@ if "watchlist" not in st.session_state:
     st.session_state.watchlist = []
 
 # =========================
-# DATA LOAD
+# LOAD DATA
 # =========================
 try:
     df = pd.read_csv("netflix_titles.csv")
@@ -235,12 +182,6 @@ def get_poster(title: str):
         return "https://image.tmdb.org/t/p/w500" + movie["poster_path"]
     return None
 
-def get_backdrop(title: str):
-    movie = tmdb_search_movie(title)
-    if movie and movie.get("backdrop_path"):
-        return "https://image.tmdb.org/t/p/original" + movie["backdrop_path"]
-    return None
-
 def get_tmdb_release_date(title: str):
     movie = tmdb_search_movie(title)
     if movie and movie.get("release_date"):
@@ -258,16 +199,6 @@ def show_landing_page():
             <div class="top-actions">
                 <button class="lang-btn">English ▾</button>
                 <button class="sign-btn">Sign In</button>
-            </div>
-        </div>
-
-        <div class="hero-center">
-            <h1>Unlimited movies, shows,<br>and more</h1>
-            <h3>Starts at ₹149. Cancel at any time.</h3>
-            <p>Ready to watch? Enter your email to create or restart your membership.</p>
-            <div class="email-row">
-                <div class="fake-input">Email address</div>
-                <button class="start-btn">Get Started ❯</button>
             </div>
         </div>
     </div>
