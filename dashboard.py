@@ -1,22 +1,28 @@
 import streamlit as st
 import pandas as pd
+import random
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-# Page config
 st.set_page_config(page_title="Netflix AI Dashboard", layout="wide")
 
+# ---------- TITLE ----------
 st.title("🎬 Netflix Movies Dashboard")
 
-# Load dataset
+# ---------- HERO ----------
+st.markdown("""
+### Welcome to Omprakash's Netflix Analytics Dashboard
+Explore movies, discover trends, and get AI-based recommendations.
+""")
+
+# ---------- LOAD DATA ----------
 df = pd.read_csv("netflix_titles.csv")
 
-# ---------------- SIDEBAR ----------------
-
+# ---------- SIDEBAR ----------
 st.sidebar.header("Filters")
 
 type_filter = st.sidebar.selectbox(
-    "Select Type",
+    "Content Type",
     df["type"].dropna().unique()
 )
 
@@ -32,26 +38,26 @@ filtered_df = df[
     (df["release_year"] <= year_filter)
 ]
 
-# ---------------- DATA PREVIEW ----------------
+# ---------- METRICS ----------
+col1, col2, col3 = st.columns(3)
 
-st.subheader("Dataset Preview")
-st.dataframe(filtered_df.head())
+col1.metric("Total Titles", len(df))
+col2.metric("Movies", len(df[df["type"]=="Movie"]))
+col3.metric("TV Shows", len(df[df["type"]=="TV Show"]))
 
-# ---------------- ANALYTICS ----------------
-
-st.subheader("Movies vs TV Shows")
+# ---------- ANALYTICS ----------
+st.subheader("📊 Content Distribution")
 st.bar_chart(filtered_df["type"].value_counts())
 
-st.subheader("Top Countries")
+st.subheader("🌍 Top Countries")
 st.bar_chart(filtered_df["country"].value_counts().head(10))
 
-st.subheader("Top Genres")
+st.subheader("🎭 Top Genres")
 
 genres = filtered_df["listed_in"].str.split(",").explode()
 st.bar_chart(genres.value_counts().head(10))
 
-# ---------------- SEARCH ----------------
-
+# ---------- SEARCH ----------
 st.subheader("🔎 Search Movie")
 
 search = st.text_input("Enter movie name")
@@ -62,8 +68,7 @@ if search:
     ]
     st.write(results[["title","type","country","release_year"]])
 
-# ---------------- RECOMMENDATION ----------------
-
+# ---------- RECOMMENDATION ----------
 st.subheader("🤖 Movie Recommendation")
 
 df["combined"] = df["title"] + df["director"].fillna("")
@@ -89,33 +94,46 @@ if st.button("Recommend"):
     for i in scores:
         st.write(df.iloc[i[0]].title)
 
-# ---------------- MOVIE POSTER GALLERY ----------------
+# ---------- TRENDING ----------
+st.subheader("🔥 Trending Movies")
 
-st.subheader("🎬 Popular Movies Gallery")
-
-poster_urls = [
-"https://image.tmdb.org/t/p/w500/9O1Iy9od7b0T1gM6h0Zq9KoU3Lj.jpg",
-"https://image.tmdb.org/t/p/w500/5P8SmMzSNYikXpxil6BYzJ16611.jpg",
-"https://image.tmdb.org/t/p/w500/udDclJoHjfjb8Ekgsd4FDteOkCU.jpg",
-"https://image.tmdb.org/t/p/w500/t6HIqrRAclMCA60NsSmeqe9RmNV.jpg",
-"https://image.tmdb.org/t/p/w500/3bhkrj58Vtu7enYsRolD1fZdja1.jpg",
-"https://image.tmdb.org/t/p/w500/q719jXXEzOoYaps6babgKnONONX.jpg",
-"https://image.tmdb.org/t/p/w500/kqjL17yufvn9OVLyXYpvtyrFfak.jpg",
-"https://image.tmdb.org/t/p/w500/yXNVcG0C7Oymg9F9ecXa9MWVwj8.jpg",
-"https://image.tmdb.org/t/p/w500/8UlWHLMpgZm9bx6QYh0NFoq67TZ.jpg",
-"https://image.tmdb.org/t/p/w500/5KCVkau1HEl7ZzfPsKAPM0sMiKc.jpg"
+trending = [
+"3 Idiots","Dangal","PK","Andhadhun","Queen",
+"Bajrangi Bhaijaan","Sholay","Lagaan","Drishyam","Barfi"
 ]
 
-movie_names = [
-"Sholay","3 Idiots","Dangal","PK","Lagaan",
-"Gangs of Wasseypur","Zindagi Na Milegi Dobara",
-"Queen","Bajrangi Bhaijaan","Andhadhun"
-]
+for movie in trending:
+    st.write("⭐", movie)
 
-poster_urls = poster_urls * 5
-movie_names = movie_names * 5
+# ---------- MOVIE POSTERS ----------
+st.subheader("🎬 Movie Poster Gallery")
+
+# sample 500 titles randomly
+sample_movies = df.sample(min(500, len(df)))
+
+# fake poster generator (random placeholder)
+def get_poster():
+    return f"https://picsum.photos/200/300?random={random.randint(1,10000)}"
+
+posters = [get_poster() for _ in range(len(sample_movies))]
+
+movies = sample_movies["title"].tolist()
+
+# pagination
+page = st.slider("Select Page", 1, int(len(posters)/20)+1, 1)
+
+start = (page-1)*20
+end = start+20
 
 cols = st.columns(5)
 
-for i, (poster, name) in enumerate(zip(poster_urls, movie_names)):
+for i, (poster, name) in enumerate(zip(posters[start:end], movies[start:end])):
     cols[i % 5].image(poster, caption=name)
+
+# ---------- FOOTER ----------
+st.markdown("---")
+
+st.markdown("""
+Developed by **Omprakash Dwivedi**  
+B.Tech CSE | Data Analytics & AI Enthusiast
+""")
