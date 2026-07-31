@@ -778,40 +778,7 @@ export default function EnterpriseNetflixPlatformV2() {
             </div>
           </div>
 
-          {/* FINANCIAL REVENUE SUMMARY KPI CARDS */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <div className="kpi-card p-4 text-center flex flex-col justify-center border-l-4 border-l-emerald-500 bg-gradient-to-br from-emerald-50/50 to-white dark:from-emerald-950/20 dark:to-slate-900">
-              <div className="flex items-center justify-center gap-1.5 text-emerald-600 font-extrabold text-xs mb-1">
-                <DollarSign className="w-4 h-4" /> TOTAL PORTFOLIO REVENUE
-              </div>
-              <span className="text-2xl sm:text-3xl font-black text-emerald-600 tracking-tight">{portfolioFinancials.totalRevenueFormatted}</span>
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">Est. Worldwide Collection / Value</span>
-            </div>
 
-            <div className="kpi-card p-4 text-center flex flex-col justify-center border-l-4 border-l-blue-500 bg-gradient-to-br from-blue-50/50 to-white dark:from-blue-950/20 dark:to-slate-900">
-              <div className="flex items-center justify-center gap-1.5 text-[#2563EB] font-extrabold text-xs mb-1">
-                <Building2 className="w-4 h-4" /> TOTAL CONTENT INVESTMENT
-              </div>
-              <span className="text-2xl sm:text-3xl font-black text-[#2563EB] tracking-tight">{portfolioFinancials.totalBudgetFormatted}</span>
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">Production Budget Allocated</span>
-            </div>
-
-            <div className="kpi-card p-4 text-center flex flex-col justify-center border-l-4 border-l-purple-500 bg-gradient-to-br from-purple-50/50 to-white dark:from-purple-950/20 dark:to-slate-900">
-              <div className="flex items-center justify-center gap-1.5 text-purple-600 font-extrabold text-xs mb-1">
-                <TrendingUp className="w-4 h-4" /> NET PLATFORM PROFIT
-              </div>
-              <span className="text-2xl sm:text-3xl font-black text-purple-600 tracking-tight">{portfolioFinancials.totalProfitFormatted}</span>
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">Net Profit Margin</span>
-            </div>
-
-            <div className="kpi-card p-4 text-center flex flex-col justify-center border-l-4 border-l-amber-500 bg-gradient-to-br from-amber-50/50 to-white dark:from-amber-950/20 dark:to-slate-900">
-              <div className="flex items-center justify-center gap-1.5 text-amber-600 font-extrabold text-xs mb-1">
-                <Zap className="w-4 h-4" /> AVERAGE PORTFOLIO ROI
-              </div>
-              <span className="text-2xl sm:text-3xl font-black text-amber-600 tracking-tight">{portfolioFinancials.avgRoiFormatted}</span>
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">Commercial Return Index</span>
-            </div>
-          </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
             
