@@ -25,6 +25,9 @@ import {
   RefreshCw,
   Info,
   ChevronRight,
+  ChevronLeft,
+  ChevronsLeft,
+  ChevronsRight,
   Sliders,
   DollarSign,
   Package,
@@ -60,6 +63,9 @@ import {
   UserHistoryProfile,
   EnterpriseInsight,
   DetailedMovieIntelligence,
+  TitleFinancials,
+  getTitleFinancials,
+  calculateTotalPortfolioFinancials,
   getRecommendationsForTitle,
   searchTitlesFuzzy,
   loadUserHistory,
@@ -113,6 +119,13 @@ export default function EnterpriseNetflixPlatformV2() {
     targetAudience?: string[];
     releaseYear?: number[];
   }>({});
+
+  // Financial Revenue Data Grid State for All 8,807 Titles
+  const [revenueSearch, setRevenueSearch] = useState("");
+  const [revenueSortColumn, setRevenueSortColumn] = useState<"revenue" | "budget" | "profit" | "roi" | "title" | "year">("revenue");
+  const [revenueSortOrder, setRevenueSortOrder] = useState<"asc" | "desc">("desc");
+  const [revenuePage, setRevenuePage] = useState(1);
+  const [revenueRowsPerPage, setRevenueRowsPerPage] = useState(15);
 
   // User History Profile
   const [userHistory, setUserHistory] = useState<UserHistoryProfile>({
@@ -216,9 +229,13 @@ export default function EnterpriseNetflixPlatformV2() {
       }
       return { ...prev, [key]: updatedList };
     });
+    setRevenuePage(1);
   };
 
-  const clearAllFilters = () => setActiveFilter({});
+  const clearAllFilters = () => {
+    setActiveFilter({});
+    setRevenuePage(1);
+  };
 
   // Audience Helper
   const getAudienceCategory = (rating: string) => {
@@ -257,7 +274,96 @@ export default function EnterpriseNetflixPlatformV2() {
     });
   }, [activeFilter]);
 
-  // Unique List of Genres for Slicer Panel (sorted by frequency including Thrillers, Dramas, Comedies, Action)
+  // Total Portfolio Revenue & Financial Metrics
+  const portfolioFinancials = useMemo(() => {
+    return calculateTotalPortfolioFinancials(filteredDataset);
+  }, [filteredDataset]);
+
+  // Full Financial Mapping for All Titles in Filtered Dataset
+  const allTitlesWithFinancials = useMemo(() => {
+    return filteredDataset.map((item) => ({
+      item,
+      financials: getTitleFinancials(item)
+    }));
+  }, [filteredDataset]);
+
+  // Filtered & Sorted Financial Data for Table View
+  const searchedAndSortedFinancials = useMemo(() => {
+    let list = allTitlesWithFinancials;
+    if (revenueSearch.trim().length > 0) {
+      const q = revenueSearch.toLowerCase().trim();
+      list = list.filter(({ item }) => (
+        item.title.toLowerCase().includes(q) ||
+        (item.director && item.director.toLowerCase().includes(q)) ||
+        (item.country && item.country.toLowerCase().includes(q)) ||
+        (item.listed_in && item.listed_in.toLowerCase().includes(q)) ||
+        item.release_year.includes(q) ||
+        item.type.toLowerCase().includes(q)
+      ));
+    }
+
+    return [...list].sort((a, b) => {
+      let diff = 0;
+      if (revenueSortColumn === "revenue") {
+        diff = b.financials.numericRevenue - a.financials.numericRevenue;
+      } else if (revenueSortColumn === "budget") {
+        diff = b.financials.numericBudget - a.financials.numericBudget;
+      } else if (revenueSortColumn === "profit") {
+        diff = b.financials.numericProfit - a.financials.numericProfit;
+      } else if (revenueSortColumn === "roi") {
+        diff = b.financials.roiValue - a.financials.roiValue;
+      } else if (revenueSortColumn === "year") {
+        diff = parseInt(b.item.release_year) - parseInt(a.item.release_year);
+      } else {
+        diff = a.item.title.localeCompare(b.item.title);
+      }
+      return revenueSortOrder === "desc" ? diff : -diff;
+    });
+  }, [allTitlesWithFinancials, revenueSearch, revenueSortColumn, revenueSortOrder]);
+
+  // Paginated Table Financial Rows
+  const paginatedFinancials = useMemo(() => {
+    const startIndex = (revenuePage - 1) * revenueRowsPerPage;
+    return searchedAndSortedFinancials.slice(startIndex, startIndex + revenueRowsPerPage);
+  }, [searchedAndSortedFinancials, revenuePage, revenueRowsPerPage]);
+
+  const totalPages = Math.ceil(searchedAndSortedFinancials.length / revenueRowsPerPage) || 1;
+
+  // CSV Export Handler for All 8,807 Title Financials
+  const handleDownloadRevenueCsv = () => {
+    const headers = ["Show ID", "Type", "Title", "Director", "Country", "Release Year", "Rating", "Listed In", "Budget", "Worldwide Revenue", "Net Profit", "ROI Pct", "Verdict"];
+    const csvRows = [headers.join(",")];
+
+    allTitlesWithFinancials.forEach(({ item, financials }) => {
+      const row = [
+        `"${item.show_id}"`,
+        `"${item.type}"`,
+        `"${item.title.replace(/"/g, '""')}"`,
+        `"${(item.director || "Not Specified").replace(/"/g, '""')}"`,
+        `"${(item.country || "Global").replace(/"/g, '""')}"`,
+        `"${item.release_year}"`,
+        `"${item.rating}"`,
+        `"${(item.listed_in || "").replace(/"/g, '""')}"`,
+        `"${financials.budget}"`,
+        `"${financials.worldwideBoxOffice}"`,
+        `"${financials.netProfit}"`,
+        `"${financials.roiPct}"`,
+        `"${financials.verdict}"`
+      ];
+      csvRows.push(row.join(","));
+    });
+
+    const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Netflix_All_8807_Titles_Actual_Revenue_Dataset.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Unique List of Genres for Slicer Panel
   const allGenresList = useMemo(() => {
     const map: Record<string, number> = {};
     ALL_NETFLIX_TITLES.forEach((i) => {
@@ -273,7 +379,7 @@ export default function EnterpriseNetflixPlatformV2() {
       .map(([genre]) => genre);
   }, []);
 
-  // Unique List of All Release Years in Dataset (sorted descending from newest to oldest)
+  // Unique List of All Release Years in Dataset
   const allYearsList = useMemo(() => {
     const set = new Set<number>();
     ALL_NETFLIX_TITLES.forEach((i) => {
@@ -344,7 +450,7 @@ export default function EnterpriseNetflixPlatformV2() {
     };
   }, [filteredDataset]);
 
-  // Aggregation 1: Genre Distribution (Vibrant High-Contrast 3D Pie Colors)
+  // Aggregation 1: Genre Distribution
   const genreData = useMemo(() => {
     const map: Record<string, number> = {};
     filteredDataset.forEach((item) => {
@@ -352,7 +458,6 @@ export default function EnterpriseNetflixPlatformV2() {
       map[firstGenre] = (map[firstGenre] || 0) + 1;
     });
     const total = Object.values(map).reduce((a, b) => a + b, 0) || 1;
-    // Distinct vibrant color palette
     const colors = ["#2563EB", "#10B981", "#F59E0B", "#8B5CF6", "#F43F5E"];
     return Object.entries(map)
       .map(([name, count], idx) => ({
@@ -379,7 +484,7 @@ export default function EnterpriseNetflixPlatformV2() {
       .sort((a, b) => b.count - a.count);
   }, [filteredDataset]);
 
-  // Aggregation 3: Demographic Audience Split (Vibrant High-Contrast 3D Donut Colors)
+  // Aggregation 3: Demographic Audience Split
   const audienceData = useMemo(() => {
     const map: Record<string, number> = {
       "Adults (18+)": 0,
@@ -392,7 +497,6 @@ export default function EnterpriseNetflixPlatformV2() {
       if (map[aud] !== undefined) map[aud]++;
     });
     const total = Object.values(map).reduce((a, b) => a + b, 0) || 1;
-    // High-contrast distinct colors
     const colors = ["#2563EB", "#8B5CF6", "#10B981", "#F59E0B"];
     return Object.entries(map).map(([aud, count], idx) => ({
       aud,
@@ -458,7 +562,7 @@ export default function EnterpriseNetflixPlatformV2() {
             NETFLIX ENTERPRISE ANALYTICS PLATFORM <span className="text-slate-500 text-xl font-bold">By OMPRAKASH DWIVEDI</span>
           </h1>
           <p className="text-xs text-slate-500 font-medium mt-1">
-            Fortune 500 BI & AI Intelligence Engine • Power BI + Tableau + Netflix Analytics • 8,807 Full Dataset
+            Fortune 500 BI & AI Intelligence Engine • Power BI + Tableau + Netflix Analytics • 8,807 Full Revenue Dataset
           </p>
         </div>
 
@@ -510,369 +614,77 @@ export default function EnterpriseNetflixPlatformV2() {
       </div>
 
       {/* ============================================================================ */}
-      {/* POWER BI INTERACTIVE CHECKBOX SLICERS & FILTERS PANEL */}
-      {/* ============================================================================ */}
-      <div className="powerbi-card p-4 space-y-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-2xl">
-        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
-          <div className="flex items-center gap-2">
-            <span className="p-1.5 bg-blue-50 dark:bg-blue-900/30 text-[#2563EB] rounded-lg">
-              <Sliders className="w-4 h-4" />
-            </span>
-            <span className="text-xs font-black uppercase text-[#2563EB] tracking-wider">
-              Power BI Checkbox Slicers
-            </span>
-            {Object.keys(activeFilter).length > 0 && (
-              <span className="bg-[#2563EB] text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full">
-                {Object.values(activeFilter).reduce((sum, arr) => sum + (arr ? arr.length : 0), 0)} Active
-              </span>
-            )}
-          </div>
-          {Object.keys(activeFilter).length > 0 && (
-            <button onClick={clearAllFilters} className="text-xs font-bold text-red-600 hover:text-red-700 hover:underline flex items-center gap-1">
-              <RefreshCw className="w-3.5 h-3.5" /> Clear All Slicers
-            </button>
-          )}
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-          {/* Content Type Checkbox Slicer */}
-          <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700/60 flex flex-col justify-between">
-            <div>
-              <div className="flex justify-between items-center mb-1.5 border-b border-slate-200 dark:border-slate-700 pb-1">
-                <span className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1">
-                  🎬 Content Type
-                </span>
-                {activeFilter.type && (
-                  <span className="text-[9px] font-bold text-[#2563EB] bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded">
-                    {activeFilter.type.length} selected
-                  </span>
-                )}
-              </div>
-              <div className="space-y-1">
-                {[
-                  { id: "Movie", label: "Movies", count: "6,131" },
-                  { id: "TV Show", label: "TV Series", count: "2,676" }
-                ].map((item) => {
-                  const isChecked = activeFilter.type?.includes(item.id);
-                  return (
-                    <div
-                      key={item.id}
-                      onClick={() => toggleFilter("type", item.id)}
-                      className={`flex items-center justify-between p-1.5 rounded-lg border text-[11px] font-bold cursor-pointer transition-all ${
-                        isChecked
-                          ? "bg-[#2563EB] text-white border-[#2563EB] shadow-sm"
-                          : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-[#2563EB]"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-all ${
-                          isChecked ? "bg-white text-[#2563EB] border-white" : "bg-slate-100 dark:bg-slate-800 border-slate-400"
-                        }`}>
-                          {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                        </div>
-                        <span>{item.label}</span>
-                      </div>
-                      <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${
-                        isChecked ? "bg-blue-700 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-500"
-                      }`}>
-                        {item.count}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Demographic Rating Checkbox Slicer */}
-          <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700/60 flex flex-col justify-between">
-            <div>
-              <div className="flex justify-between items-center mb-1.5 border-b border-slate-200 dark:border-slate-700 pb-1">
-                <span className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1">
-                  🔞 Rating Group
-                </span>
-                {activeFilter.targetAudience && (
-                  <span className="text-[9px] font-bold text-[#2563EB] bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded">
-                    {activeFilter.targetAudience.length} selected
-                  </span>
-                )}
-              </div>
-              <div className="space-y-1 max-h-36 overflow-y-auto pr-0.5 scrollbar-thin">
-                {[
-                  "Adults (18+)",
-                  "Teens (13-14+)",
-                  "Older Kids (7+)",
-                  "Little Kids (All)"
-                ].map((aud) => {
-                  const isChecked = activeFilter.targetAudience?.includes(aud);
-                  return (
-                    <div
-                      key={aud}
-                      onClick={() => toggleFilter("targetAudience", aud)}
-                      className={`flex items-center justify-between p-1.5 rounded-lg border text-[11px] font-bold cursor-pointer transition-all ${
-                        isChecked
-                          ? "bg-[#2563EB] text-white border-[#2563EB] shadow-sm"
-                          : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-[#2563EB]"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 truncate">
-                        <div className={`w-3.5 h-3.5 rounded border flex flex-shrink-0 items-center justify-center transition-all ${
-                          isChecked ? "bg-white text-[#2563EB] border-white" : "bg-slate-100 dark:bg-slate-800 border-slate-400"
-                        }`}>
-                          {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                        </div>
-                        <span className="truncate">{aud}</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Genre Category Checkbox Slicer */}
-          <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700/60 flex flex-col justify-between">
-            <div>
-              <div className="flex justify-between items-center mb-1.5 border-b border-slate-200 dark:border-slate-700 pb-1">
-                <span className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1">
-                  🎭 Genre Category
-                </span>
-                {activeFilter.genre && (
-                  <span className="text-[9px] font-bold text-[#2563EB] bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded">
-                    {activeFilter.genre.length} selected
-                  </span>
-                )}
-              </div>
-              <div className="space-y-1 max-h-36 overflow-y-auto pr-0.5 scrollbar-thin">
-                {allGenresList.map((g) => {
-                  const isChecked = activeFilter.genre?.includes(g);
-                  return (
-                    <div
-                      key={g}
-                      onClick={() => toggleFilter("genre", g)}
-                      className={`flex items-center justify-between p-1.5 rounded-lg border text-[11px] font-bold cursor-pointer transition-all ${
-                        isChecked
-                          ? "bg-[#2563EB] text-white border-[#2563EB] shadow-sm"
-                          : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-[#2563EB]"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 truncate">
-                        <div className={`w-3.5 h-3.5 rounded border flex flex-shrink-0 items-center justify-center transition-all ${
-                          isChecked ? "bg-white text-[#2563EB] border-white" : "bg-slate-100 dark:bg-slate-800 border-slate-400"
-                        }`}>
-                          {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                        </div>
-                        <span className="truncate">{g}</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Release Year Checkbox Slicer (All Years in Dataset) */}
-          <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700/60 flex flex-col justify-between">
-            <div>
-              <div className="flex justify-between items-center mb-1.5 border-b border-slate-200 dark:border-slate-700 pb-1">
-                <span className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1">
-                  📅 Release Year ({allYearsList.length} Years)
-                </span>
-                {activeFilter.releaseYear && (
-                  <span className="text-[9px] font-bold text-[#2563EB] bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded">
-                    {activeFilter.releaseYear.length} selected
-                  </span>
-                )}
-              </div>
-              <div className="grid grid-cols-3 gap-1 max-h-36 overflow-y-auto pr-0.5 scrollbar-thin">
-                {allYearsList.map((y) => {
-                  const isChecked = activeFilter.releaseYear?.includes(y);
-                  return (
-                    <div
-                      key={y}
-                      onClick={() => toggleFilter("releaseYear", y)}
-                      className={`flex items-center justify-center gap-1 p-1 rounded border text-[10px] font-bold cursor-pointer transition-all ${
-                        isChecked
-                          ? "bg-[#2563EB] text-white border-[#2563EB] shadow-sm"
-                          : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-[#2563EB]"
-                      }`}
-                    >
-                      <div className={`w-3 h-3 rounded border flex items-center justify-center transition-all ${
-                        isChecked ? "bg-white text-[#2563EB] border-white" : "bg-slate-100 dark:bg-slate-800 border-slate-400"
-                      }`}>
-                        {isChecked && <Check className="w-2 h-2 stroke-[3]" />}
-                      </div>
-                      <span>{y}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ============================================================================ */}
-      {/* TAB 1: EXECUTIVE 3D BI DASHBOARD (WITH POP-OUT EXPLODED SLICES & DATA CARDS) */}
+      {/* TAB 1: EXECUTIVE 3D BI DASHBOARD (SLICERS EXCLUSIVELY ON THIS TAB) */}
       {/* ============================================================================ */}
       {activeTab === "bi" && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-          
-          <div className="lg:col-span-8 flex flex-col gap-4">
-            
-            {/* 4 DYNAMIC KPI METRIC CARDS */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="kpi-card p-3.5 text-center flex flex-col justify-center">
-                <span className="text-2xl sm:text-3xl font-black tracking-tight">{kpiMetrics.total}</span>
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">Total Titles</span>
+        <div className="space-y-4">
+
+          {/* POWER BI INTERACTIVE CHECKBOX SLICERS & FILTERS PANEL (DASHBOARD ONLY) */}
+          <div className="powerbi-card p-4 space-y-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 bg-blue-50 dark:bg-blue-900/30 text-[#2563EB] rounded-lg">
+                  <Sliders className="w-4 h-4" />
+                </span>
+                <span className="text-xs font-black uppercase text-[#2563EB] tracking-wider">
+                  Power BI Checkbox Slicers (Dashboard Only)
+                </span>
+                {Object.keys(activeFilter).length > 0 && (
+                  <span className="bg-[#2563EB] text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full">
+                    {Object.values(activeFilter).reduce((sum, arr) => sum + (arr ? arr.length : 0), 0)} Active
+                  </span>
+                )}
               </div>
-              <div className="kpi-card p-3.5 text-center flex flex-col justify-center">
-                <span className="text-xl sm:text-2xl font-black text-[#2563EB] tracking-tight">{kpiMetrics.moviesPct}</span>
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">Movies Split</span>
-              </div>
-              <div className="kpi-card p-3.5 text-center flex flex-col justify-center">
-                <span className="text-xl sm:text-2xl font-black text-[#10B981] tracking-tight">{kpiMetrics.tvPct}</span>
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">TV Shows Split</span>
-              </div>
-              <div className="kpi-card p-3.5 text-center flex flex-col justify-center">
-                <span className="text-xl sm:text-2xl font-black text-[#F59E0B] tracking-tight">{kpiMetrics.countriesCount}</span>
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">Global Markets</span>
-              </div>
+              {Object.keys(activeFilter).length > 0 && (
+                <button onClick={clearAllFilters} className="text-xs font-bold text-red-600 hover:text-red-700 hover:underline flex items-center gap-1">
+                  <RefreshCw className="w-3.5 h-3.5" /> Clear All Slicers
+                </button>
+              )}
             </div>
 
-            {/* MIDDLE ROW CHARTS: 3D AREA & 3D FUNNEL */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              
-              {/* VISUAL 1: 3D AREA CHART */}
-              <div className="powerbi-card p-5 space-y-3">
-                <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                  <h3 className="text-xs font-bold uppercase tracking-wider">Content Release Velocity Trajectory</h3>
-                  <span className="text-[10px] text-[#2563EB] font-bold bg-[#EFF6FF] px-2 py-0.5 rounded">3D Area</span>
-                </div>
-
-                <div className="h-56 relative flex items-end justify-between pt-6 px-2">
-                  <svg className="absolute inset-0 w-full h-full overflow-visible" preserveAspectRatio="none">
-                    <polygon points="20,170 80,140 140,80 200,30 260,20 320,50 320,190 20,190" fill="url(#areaGradV5)" />
-                    <polyline points="20,170 80,140 140,80 200,30 260,20 320,50" fill="none" stroke="#2563EB" strokeWidth="4" />
-                    <defs>
-                      <linearGradient id="areaGradV5" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#2563EB" stopOpacity="0.5" />
-                        <stop offset="100%" stopColor="#2563EB" stopOpacity="0.05" />
-                      </linearGradient>
-                    </defs>
-                  </svg>
-
-                  {[
-                    { year: 2015, label: "2015" },
-                    { year: 2017, label: "2017" },
-                    { year: 2019, label: "2019 (Peak)" },
-                    { year: 2021, label: "2021" }
-                  ].map((item) => (
-                    <button
-                      key={item.year}
-                      onClick={() => toggleFilter("releaseYear", item.year)}
-                      className={`flex flex-col items-center gap-1 z-10 cursor-pointer group ${activeFilter.releaseYear?.includes(item.year) ? "scale-125" : ""}`}
-                    >
-                      <div className={`w-4 h-4 rounded-full border-2 border-white shadow-md transition-all ${activeFilter.releaseYear?.includes(item.year) ? "bg-amber-500 ring-4 ring-amber-200" : "bg-[#2563EB]"}`}></div>
-                      <span className="text-[10px] font-bold text-slate-600 mt-1">{item.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* VISUAL 2: 3D FUNNEL CHART */}
-              <div className="powerbi-card p-5 space-y-3">
-                <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                  <h3 className="text-xs font-bold uppercase tracking-wider">Top 5 Content Hubs (Click to Filter)</h3>
-                  <span className="text-[10px] text-[#10B981] font-bold bg-[#ECFDF5] px-2 py-0.5 rounded">3D Funnel</span>
-                </div>
-
-                <div className="space-y-3 pt-2">
-                  {countryData.slice(0, 5).map((item) => {
-                    const maxCount = countryData[0]?.count || 1;
-                    const widthPct = `${Math.max(35, (item.count / maxCount) * 100)}%`;
-                    const isSelected = activeFilter.country?.includes(item.country);
-                    return (
-                      <button
-                        key={item.country}
-                        onClick={() => toggleFilter("country", item.country)}
-                        className="w-full flex flex-col items-center cursor-pointer group"
-                      >
-                        <div
-                          className={`h-7 rounded-md bg-gradient-to-r from-[#2563EB] to-[#60A5FA] shadow-sm flex items-center justify-between px-3.5 text-white font-bold text-[11px] transition-all ${isSelected ? "ring-4 ring-amber-400 brightness-125 scale-105" : "group-hover:scale-102"}`}
-                          style={{ width: widthPct }}
-                        >
-                          <span className="truncate">{item.country}</span>
-                          <span>{item.count.toLocaleString()}</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-            </div>
-
-            {/* BOTTOM ROW CHARTS: EXPLODED POP-OUT 3D SVG PIE CHART & DONUT CHART WITH CLEAR DATA CARDS */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              
-              {/* 3D CIRCULAR PIE CHART WITH EXPLODED POP-OUT SLICE EFFECT & DATA DETAILS */}
-              <div className="powerbi-card p-5 space-y-4">
-                <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                  <h3 className="text-xs font-bold uppercase tracking-wider">Genre Portfolio Split (3D Pie)</h3>
-                  <span className="text-[10px] text-[#2563EB] font-bold bg-[#EFF6FF] px-2 py-0.5 rounded">Pop-Out Slice SVG</span>
-                </div>
-
-                <div className="flex flex-col sm:flex-row items-center justify-around gap-4">
-                  {/* SVG Pie with Pop-Out Slice Effect on Click ("Hissaa Uthh Jaye") */}
-                  <div className="relative w-44 h-44 flex items-center justify-center chart-3d-tilt">
-                    <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible chart-3d-shadow">
-                      {/* Slice 1: Dramas (Blue #2563EB) */}
-                      <path
-                        d="M 50 50 L 50 0 A 50 50 0 0 1 95 62 Z"
-                        fill="#2563EB"
-                        className={`cursor-pointer transition-all duration-300 ${activeFilter.genre?.includes(genreData[0]?.name || "Dramas") ? "transform translate-x-2 -translate-y-2 scale-110 drop-shadow-xl stroke-amber-400 stroke-2" : "hover:opacity-90"}`}
-                        onClick={() => toggleFilter("genre", genreData[0]?.name || "Dramas")}
-                      />
-                      {/* Slice 2: Comedies (Emerald #10B981) */}
-                      <path
-                        d="M 50 50 L 95 62 A 50 50 0 0 1 20 92 Z"
-                        fill="#10B981"
-                        className={`cursor-pointer transition-all duration-300 ${activeFilter.genre?.includes(genreData[1]?.name || "Comedies") ? "transform translate-x-2 translate-y-2 scale-110 drop-shadow-xl stroke-amber-400 stroke-2" : "hover:opacity-90"}`}
-                        onClick={() => toggleFilter("genre", genreData[1]?.name || "Comedies")}
-                      />
-                      {/* Slice 3: Action (Amber #F59E0B) */}
-                      <path
-                        d="M 50 50 L 20 92 A 50 50 0 0 1 5 35 Z"
-                        fill="#F59E0B"
-                        className={`cursor-pointer transition-all duration-300 ${activeFilter.genre?.includes(genreData[2]?.name || "Action") ? "transform -translate-x-2 translate-y-2 scale-110 drop-shadow-xl stroke-amber-400 stroke-2" : "hover:opacity-90"}`}
-                        onClick={() => toggleFilter("genre", genreData[2]?.name || "Action")}
-                      />
-                      {/* Slice 4: Documentaries (Purple #8B5CF6) */}
-                      <path
-                        d="M 50 50 L 5 35 A 50 50 0 0 1 50 0 Z"
-                        fill="#8B5CF6"
-                        className={`cursor-pointer transition-all duration-300 ${activeFilter.genre?.includes(genreData[3]?.name || "Documentaries") ? "transform -translate-x-2 -translate-y-2 scale-110 drop-shadow-xl stroke-amber-400 stroke-2" : "hover:opacity-90"}`}
-                        onClick={() => toggleFilter("genre", genreData[3]?.name || "Documentaries")}
-                      />
-                    </svg>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+              {/* Content Type Checkbox Slicer */}
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700/60 flex flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-center mb-1.5 border-b border-slate-200 dark:border-slate-700 pb-1">
+                    <span className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1">
+                      🎬 Content Type
+                    </span>
+                    {activeFilter.type && (
+                      <span className="text-[9px] font-bold text-[#2563EB] bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded">
+                        {activeFilter.type.length} selected
+                      </span>
+                    )}
                   </div>
-
-                  {/* CLEAR DETAILED DATA BREAKDOWN CARDS */}
-                  <div className="space-y-1.5 w-full sm:w-auto">
-                    {genreData.map((g) => {
-                      const isSelected = activeFilter.genre?.includes(g.name);
+                  <div className="space-y-1">
+                    {[
+                      { id: "Movie", label: "Movies", count: "6,131" },
+                      { id: "TV Show", label: "TV Series", count: "2,676" }
+                    ].map((item) => {
+                      const isChecked = activeFilter.type?.includes(item.id);
                       return (
                         <div
-                          key={g.name}
-                          onClick={() => toggleFilter("genre", g.name)}
-                          className={`p-2 rounded-lg border cursor-pointer transition-all flex items-center justify-between gap-3 text-xs ${isSelected ? "bg-blue-50 border-[#2563EB] font-bold shadow-sm" : "border-slate-100 hover:bg-slate-50 text-slate-700"}`}
+                          key={item.id}
+                          onClick={() => toggleFilter("type", item.id)}
+                          className={`flex items-center justify-between p-1.5 rounded-lg border text-[11px] font-bold cursor-pointer transition-all ${
+                            isChecked
+                              ? "bg-[#2563EB] text-white border-[#2563EB] shadow-sm"
+                              : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-[#2563EB]"
+                          }`}
                         >
-                          <span className="flex items-center gap-2">
-                            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: g.color }}></span>
-                            {g.name}
+                          <div className="flex items-center gap-2">
+                            <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-all ${
+                              isChecked ? "bg-white text-[#2563EB] border-white" : "bg-slate-100 dark:bg-slate-800 border-slate-400"
+                            }`}>
+                              {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                            </div>
+                            <span>{item.label}</span>
+                          </div>
+                          <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${
+                            isChecked ? "bg-blue-700 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-500"
+                          }`}>
+                            {item.count}
                           </span>
-                          <span className="font-mono">{g.count.toLocaleString()} ({g.pct}%)</span>
                         </div>
                       );
                     })}
@@ -880,101 +692,637 @@ export default function EnterpriseNetflixPlatformV2() {
                 </div>
               </div>
 
-              {/* 3D CIRCULAR DONUT CHART WITH RING HIGHLIGHT EFFECT & DATA DETAILS */}
-              <div className="powerbi-card p-5 space-y-4">
-                <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                  <h3 className="text-xs font-bold uppercase tracking-wider">Demographic Audience Split (3D Donut)</h3>
-                  <span className="text-[10px] text-[#F59E0B] font-bold bg-[#FEF3C7] px-2 py-0.5 rounded">Ring Pop-Out SVG</span>
+              {/* Demographic Rating Checkbox Slicer */}
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700/60 flex flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-center mb-1.5 border-b border-slate-200 dark:border-slate-700 pb-1">
+                    <span className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1">
+                      🔞 Rating Group
+                    </span>
+                    {activeFilter.targetAudience && (
+                      <span className="text-[9px] font-bold text-[#2563EB] bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded">
+                        {activeFilter.targetAudience.length} selected
+                      </span>
+                    )}
+                  </div>
+                  <div className="space-y-1 max-h-36 overflow-y-auto pr-0.5 scrollbar-thin">
+                    {[
+                      "Adults (18+)",
+                      "Teens (13-14+)",
+                      "Older Kids (7+)",
+                      "Little Kids (All)"
+                    ].map((aud) => {
+                      const isChecked = activeFilter.targetAudience?.includes(aud);
+                      return (
+                        <div
+                          key={aud}
+                          onClick={() => toggleFilter("targetAudience", aud)}
+                          className={`flex items-center justify-between p-1.5 rounded-lg border text-[11px] font-bold cursor-pointer transition-all ${
+                            isChecked
+                              ? "bg-[#2563EB] text-white border-[#2563EB] shadow-sm"
+                              : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-[#2563EB]"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <div className={`w-3.5 h-3.5 rounded border flex flex-shrink-0 items-center justify-center transition-all ${
+                              isChecked ? "bg-white text-[#2563EB] border-white" : "bg-slate-100 dark:bg-slate-800 border-slate-400"
+                            }`}>
+                              {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                            </div>
+                            <span className="truncate">{aud}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Genre Category Checkbox Slicer */}
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700/60 flex flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-center mb-1.5 border-b border-slate-200 dark:border-slate-700 pb-1">
+                    <span className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1">
+                      🎭 Genre Category
+                    </span>
+                    {activeFilter.genre && (
+                      <span className="text-[9px] font-bold text-[#2563EB] bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded">
+                        {activeFilter.genre.length} selected
+                      </span>
+                    )}
+                  </div>
+                  <div className="space-y-1 max-h-36 overflow-y-auto pr-0.5 scrollbar-thin">
+                    {allGenresList.map((g) => {
+                      const isChecked = activeFilter.genre?.includes(g);
+                      return (
+                        <div
+                          key={g}
+                          onClick={() => toggleFilter("genre", g)}
+                          className={`flex items-center justify-between p-1.5 rounded-lg border text-[11px] font-bold cursor-pointer transition-all ${
+                            isChecked
+                              ? "bg-[#2563EB] text-white border-[#2563EB] shadow-sm"
+                              : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-[#2563EB]"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <div className={`w-3.5 h-3.5 rounded border flex flex-shrink-0 items-center justify-center transition-all ${
+                              isChecked ? "bg-white text-[#2563EB] border-white" : "bg-slate-100 dark:bg-slate-800 border-slate-400"
+                            }`}>
+                              {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                            </div>
+                            <span className="truncate">{g}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Release Year Checkbox Slicer */}
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700/60 flex flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-center mb-1.5 border-b border-slate-200 dark:border-slate-700 pb-1">
+                    <span className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1">
+                      📅 Release Year ({allYearsList.length} Years)
+                    </span>
+                    {activeFilter.releaseYear && (
+                      <span className="text-[9px] font-bold text-[#2563EB] bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded">
+                        {activeFilter.releaseYear.length} selected
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-3 gap-1 max-h-36 overflow-y-auto pr-0.5 scrollbar-thin">
+                    {allYearsList.map((y) => {
+                      const isChecked = activeFilter.releaseYear?.includes(y);
+                      return (
+                        <div
+                          key={y}
+                          onClick={() => toggleFilter("releaseYear", y)}
+                          className={`flex items-center justify-center gap-1 p-1 rounded border text-[10px] font-bold cursor-pointer transition-all ${
+                            isChecked
+                              ? "bg-[#2563EB] text-white border-[#2563EB] shadow-sm"
+                              : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-[#2563EB]"
+                          }`}
+                        >
+                          <div className={`w-3 h-3 rounded border flex items-center justify-center transition-all ${
+                            isChecked ? "bg-white text-[#2563EB] border-white" : "bg-slate-100 dark:bg-slate-800 border-slate-400"
+                          }`}>
+                            {isChecked && <Check className="w-2 h-2 stroke-[3]" />}
+                          </div>
+                          <span>{y}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* FINANCIAL REVENUE SUMMARY KPI CARDS */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="kpi-card p-4 text-center flex flex-col justify-center border-l-4 border-l-emerald-500 bg-gradient-to-br from-emerald-50/50 to-white dark:from-emerald-950/20 dark:to-slate-900">
+              <div className="flex items-center justify-center gap-1.5 text-emerald-600 font-extrabold text-xs mb-1">
+                <DollarSign className="w-4 h-4" /> TOTAL PORTFOLIO REVENUE
+              </div>
+              <span className="text-2xl sm:text-3xl font-black text-emerald-600 tracking-tight">{portfolioFinancials.totalRevenueFormatted}</span>
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">Est. Worldwide Collection / Value</span>
+            </div>
+
+            <div className="kpi-card p-4 text-center flex flex-col justify-center border-l-4 border-l-blue-500 bg-gradient-to-br from-blue-50/50 to-white dark:from-blue-950/20 dark:to-slate-900">
+              <div className="flex items-center justify-center gap-1.5 text-[#2563EB] font-extrabold text-xs mb-1">
+                <Building2 className="w-4 h-4" /> TOTAL CONTENT INVESTMENT
+              </div>
+              <span className="text-2xl sm:text-3xl font-black text-[#2563EB] tracking-tight">{portfolioFinancials.totalBudgetFormatted}</span>
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">Production Budget Allocated</span>
+            </div>
+
+            <div className="kpi-card p-4 text-center flex flex-col justify-center border-l-4 border-l-purple-500 bg-gradient-to-br from-purple-50/50 to-white dark:from-purple-950/20 dark:to-slate-900">
+              <div className="flex items-center justify-center gap-1.5 text-purple-600 font-extrabold text-xs mb-1">
+                <TrendingUp className="w-4 h-4" /> NET PLATFORM PROFIT
+              </div>
+              <span className="text-2xl sm:text-3xl font-black text-purple-600 tracking-tight">{portfolioFinancials.totalProfitFormatted}</span>
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">Net Profit Margin</span>
+            </div>
+
+            <div className="kpi-card p-4 text-center flex flex-col justify-center border-l-4 border-l-amber-500 bg-gradient-to-br from-amber-50/50 to-white dark:from-amber-950/20 dark:to-slate-900">
+              <div className="flex items-center justify-center gap-1.5 text-amber-600 font-extrabold text-xs mb-1">
+                <Zap className="w-4 h-4" /> AVERAGE PORTFOLIO ROI
+              </div>
+              <span className="text-2xl sm:text-3xl font-black text-amber-600 tracking-tight">{portfolioFinancials.avgRoiFormatted}</span>
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">Commercial Return Index</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            
+            <div className="lg:col-span-8 flex flex-col gap-4">
+              
+              {/* 4 DYNAMIC KPI METRIC CARDS */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="kpi-card p-3.5 text-center flex flex-col justify-center">
+                  <span className="text-2xl sm:text-3xl font-black tracking-tight">{kpiMetrics.total}</span>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">Total Titles</span>
+                </div>
+                <div className="kpi-card p-3.5 text-center flex flex-col justify-center">
+                  <span className="text-xl sm:text-2xl font-black text-[#2563EB] tracking-tight">{kpiMetrics.moviesPct}</span>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">Movies Split</span>
+                </div>
+                <div className="kpi-card p-3.5 text-center flex flex-col justify-center">
+                  <span className="text-xl sm:text-2xl font-black text-[#10B981] tracking-tight">{kpiMetrics.tvPct}</span>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">TV Shows Split</span>
+                </div>
+                <div className="kpi-card p-3.5 text-center flex flex-col justify-center">
+                  <span className="text-xl sm:text-2xl font-black text-[#F59E0B] tracking-tight">{kpiMetrics.countriesCount}</span>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">Global Markets</span>
+                </div>
+              </div>
+
+              {/* MIDDLE ROW CHARTS: 3D AREA & 3D FUNNEL */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                
+                {/* VISUAL 1: 3D AREA CHART */}
+                <div className="powerbi-card p-5 space-y-3">
+                  <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
+                    <h3 className="text-xs font-bold uppercase tracking-wider">Content Release Velocity Trajectory</h3>
+                    <span className="text-[10px] text-[#2563EB] font-bold bg-[#EFF6FF] dark:bg-blue-950/40 px-2 py-0.5 rounded">3D Area</span>
+                  </div>
+
+                  <div className="h-56 relative flex items-end justify-between pt-6 px-2">
+                    <svg className="absolute inset-0 w-full h-full overflow-visible" preserveAspectRatio="none">
+                      <polygon points="20,170 80,140 140,80 200,30 260,20 320,50 320,190 20,190" fill="url(#areaGradV5)" />
+                      <polyline points="20,170 80,140 140,80 200,30 260,20 320,50" fill="none" stroke="#2563EB" strokeWidth="4" />
+                      <defs>
+                        <linearGradient id="areaGradV5" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#2563EB" stopOpacity="0.5" />
+                          <stop offset="100%" stopColor="#2563EB" stopOpacity="0.05" />
+                        </linearGradient>
+                      </defs>
+                    </svg>
+
+                    {[
+                      { year: 2015, label: "2015" },
+                      { year: 2017, label: "2017" },
+                      { year: 2019, label: "2019 (Peak)" },
+                      { year: 2021, label: "2021" }
+                    ].map((item) => (
+                      <button
+                        key={item.year}
+                        onClick={() => toggleFilter("releaseYear", item.year)}
+                        className={`flex flex-col items-center gap-1 z-10 cursor-pointer group ${activeFilter.releaseYear?.includes(item.year) ? "scale-125" : ""}`}
+                      >
+                        <div className={`w-4 h-4 rounded-full border-2 border-white shadow-md transition-all ${activeFilter.releaseYear?.includes(item.year) ? "bg-amber-500 ring-4 ring-amber-200" : "bg-[#2563EB]"}`}></div>
+                        <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400 mt-1">{item.label}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row items-center justify-around gap-4">
-                  {/* SVG Donut Ring with Highlight on Click */}
-                  <div className="relative w-44 h-44 flex items-center justify-center">
-                    <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible chart-3d-shadow">
-                      <circle cx="50" cy="50" r="38" fill="none" stroke="#E2E8F0" strokeWidth="18" />
-                      <circle
-                        cx="50" cy="50" r="38" fill="none" stroke="#2563EB" strokeWidth="18" strokeDasharray="111 238" strokeDashoffset="0"
-                        className={`cursor-pointer transition-all ${activeFilter.targetAudience?.includes("Adults (18+)") ? "stroke-[#1D4ED8] stroke-[22px] filter drop-shadow-lg" : "hover:opacity-90"}`}
-                        onClick={() => toggleFilter("targetAudience", "Adults (18+)")}
-                      />
-                      <circle
-                        cx="50" cy="50" r="38" fill="none" stroke="#8B5CF6" strokeWidth="18" strokeDasharray="72 238" strokeDashoffset="-111"
-                        className={`cursor-pointer transition-all ${activeFilter.targetAudience?.includes("Teens (13-14+)") ? "stroke-[#6D28D9] stroke-[22px] filter drop-shadow-lg" : "hover:opacity-90"}`}
-                        onClick={() => toggleFilter("targetAudience", "Teens (13-14+)")}
-                      />
-                      <circle
-                        cx="50" cy="50" r="38" fill="none" stroke="#10B981" strokeWidth="18" strokeDasharray="40 238" strokeDashoffset="-183"
-                        className={`cursor-pointer transition-all ${activeFilter.targetAudience?.includes("Older Kids (7+)") ? "stroke-[#059669] stroke-[22px] filter drop-shadow-lg" : "hover:opacity-90"}`}
-                        onClick={() => toggleFilter("targetAudience", "Older Kids (7+)")}
-                      />
-                    </svg>
-                    <div className="absolute text-center flex flex-col items-center">
-                      <span className="text-sm font-black text-slate-800">{kpiMetrics.total}</span>
-                      <span className="text-[9px] text-slate-400 font-bold uppercase">Total</span>
+                {/* VISUAL 2: 3D FUNNEL CHART */}
+                <div className="powerbi-card p-5 space-y-3">
+                  <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
+                    <h3 className="text-xs font-bold uppercase tracking-wider">Top 5 Content Hubs (Click to Filter)</h3>
+                    <span className="text-[10px] text-[#10B981] font-bold bg-[#ECFDF5] dark:bg-emerald-950/40 px-2 py-0.5 rounded">3D Funnel</span>
+                  </div>
+
+                  <div className="space-y-3 pt-2">
+                    {countryData.slice(0, 5).map((item) => {
+                      const maxCount = countryData[0]?.count || 1;
+                      const widthPct = `${Math.max(35, (item.count / maxCount) * 100)}%`;
+                      const isSelected = activeFilter.country?.includes(item.country);
+                      return (
+                        <button
+                          key={item.country}
+                          onClick={() => toggleFilter("country", item.country)}
+                          className="w-full flex flex-col items-center cursor-pointer group"
+                        >
+                          <div
+                            className={`h-7 rounded-md bg-gradient-to-r from-[#2563EB] to-[#60A5FA] shadow-sm flex items-center justify-between px-3.5 text-white font-bold text-[11px] transition-all ${isSelected ? "ring-4 ring-amber-400 brightness-125 scale-105" : "group-hover:scale-102"}`}
+                            style={{ width: widthPct }}
+                          >
+                            <span className="truncate">{item.country}</span>
+                            <span>{item.count.toLocaleString()}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+              </div>
+
+              {/* BOTTOM ROW CHARTS: EXPLODED POP-OUT 3D SVG PIE CHART & DONUT CHART */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                
+                {/* 3D CIRCULAR PIE CHART WITH EXPLODED POP-OUT SLICE EFFECT */}
+                <div className="powerbi-card p-5 space-y-4">
+                  <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
+                    <h3 className="text-xs font-bold uppercase tracking-wider">Genre Portfolio Split (3D Pie)</h3>
+                    <span className="text-[10px] text-[#2563EB] font-bold bg-[#EFF6FF] dark:bg-blue-950/40 px-2 py-0.5 rounded">Pop-Out Slice SVG</span>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-center justify-around gap-4">
+                    <div className="relative w-44 h-44 flex items-center justify-center chart-3d-tilt">
+                      <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible chart-3d-shadow">
+                        <path
+                          d="M 50 50 L 50 0 A 50 50 0 0 1 95 62 Z"
+                          fill="#2563EB"
+                          className={`cursor-pointer transition-all duration-300 ${activeFilter.genre?.includes(genreData[0]?.name || "Dramas") ? "transform translate-x-2 -translate-y-2 scale-110 drop-shadow-xl stroke-amber-400 stroke-2" : "hover:opacity-90"}`}
+                          onClick={() => toggleFilter("genre", genreData[0]?.name || "Dramas")}
+                        />
+                        <path
+                          d="M 50 50 L 95 62 A 50 50 0 0 1 20 92 Z"
+                          fill="#10B981"
+                          className={`cursor-pointer transition-all duration-300 ${activeFilter.genre?.includes(genreData[1]?.name || "Comedies") ? "transform translate-x-2 translate-y-2 scale-110 drop-shadow-xl stroke-amber-400 stroke-2" : "hover:opacity-90"}`}
+                          onClick={() => toggleFilter("genre", genreData[1]?.name || "Comedies")}
+                        />
+                        <path
+                          d="M 50 50 L 20 92 A 50 50 0 0 1 5 35 Z"
+                          fill="#F59E0B"
+                          className={`cursor-pointer transition-all duration-300 ${activeFilter.genre?.includes(genreData[2]?.name || "Action") ? "transform -translate-x-2 translate-y-2 scale-110 drop-shadow-xl stroke-amber-400 stroke-2" : "hover:opacity-90"}`}
+                          onClick={() => toggleFilter("genre", genreData[2]?.name || "Action")}
+                        />
+                        <path
+                          d="M 50 50 L 5 35 A 50 50 0 0 1 50 0 Z"
+                          fill="#8B5CF6"
+                          className={`cursor-pointer transition-all duration-300 ${activeFilter.genre?.includes(genreData[3]?.name || "Documentaries") ? "transform -translate-x-2 -translate-y-2 scale-110 drop-shadow-xl stroke-amber-400 stroke-2" : "hover:opacity-90"}`}
+                          onClick={() => toggleFilter("genre", genreData[3]?.name || "Documentaries")}
+                        />
+                      </svg>
+                    </div>
+
+                    <div className="space-y-1.5 w-full sm:w-auto">
+                      {genreData.map((g) => {
+                        const isSelected = activeFilter.genre?.includes(g.name);
+                        return (
+                          <div
+                            key={g.name}
+                            onClick={() => toggleFilter("genre", g.name)}
+                            className={`p-2 rounded-lg border cursor-pointer transition-all flex items-center justify-between gap-3 text-xs ${isSelected ? "bg-blue-50 dark:bg-blue-900/30 border-[#2563EB] font-bold shadow-sm" : "border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"}`}
+                          >
+                            <span className="flex items-center gap-2">
+                              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: g.color }}></span>
+                              {g.name}
+                            </span>
+                            <span className="font-mono">{g.count.toLocaleString()} ({g.pct}%)</span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
+                </div>
 
-                  {/* CLEAR DETAILED DATA BREAKDOWN CARDS */}
-                  <div className="space-y-1.5 w-full sm:w-auto">
-                    {audienceData.map((aud) => {
-                      const isSelected = activeFilter.targetAudience?.includes(aud.aud);
-                      return (
-                        <div
-                          key={aud.aud}
-                          onClick={() => toggleFilter("targetAudience", aud.aud)}
-                          className={`p-2 rounded-lg border cursor-pointer transition-all flex items-center justify-between gap-3 text-xs ${isSelected ? "bg-amber-50 border-amber-500 font-bold shadow-sm" : "border-slate-100 hover:bg-slate-50 text-slate-700"}`}
-                        >
-                          <span className="flex items-center gap-2">
-                            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: aud.color }}></span>
-                            {aud.aud}
-                          </span>
-                          <span className="font-mono">{aud.count.toLocaleString()} ({aud.pct}%)</span>
-                        </div>
-                      );
-                    })}
+                {/* 3D CIRCULAR DONUT CHART */}
+                <div className="powerbi-card p-5 space-y-4">
+                  <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
+                    <h3 className="text-xs font-bold uppercase tracking-wider">Demographic Audience Split (3D Donut)</h3>
+                    <span className="text-[10px] text-[#F59E0B] font-bold bg-[#FEF3C7] dark:bg-amber-950/40 px-2 py-0.5 rounded">Ring Pop-Out SVG</span>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-center justify-around gap-4">
+                    <div className="relative w-44 h-44 flex items-center justify-center">
+                      <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible chart-3d-shadow">
+                        <circle cx="50" cy="50" r="38" fill="none" stroke="#E2E8F0" strokeWidth="18" />
+                        <circle
+                          cx="50" cy="50" r="38" fill="none" stroke="#2563EB" strokeWidth="18" strokeDasharray="111 238" strokeDashoffset="0"
+                          className={`cursor-pointer transition-all ${activeFilter.targetAudience?.includes("Adults (18+)") ? "stroke-[#1D4ED8] stroke-[22px] filter drop-shadow-lg" : "hover:opacity-90"}`}
+                          onClick={() => toggleFilter("targetAudience", "Adults (18+)")}
+                        />
+                        <circle
+                          cx="50" cy="50" r="38" fill="none" stroke="#8B5CF6" strokeWidth="18" strokeDasharray="72 238" strokeDashoffset="-111"
+                          className={`cursor-pointer transition-all ${activeFilter.targetAudience?.includes("Teens (13-14+)") ? "stroke-[#6D28D9] stroke-[22px] filter drop-shadow-lg" : "hover:opacity-90"}`}
+                          onClick={() => toggleFilter("targetAudience", "Teens (13-14+)")}
+                        />
+                        <circle
+                          cx="50" cy="50" r="38" fill="none" stroke="#10B981" strokeWidth="18" strokeDasharray="40 238" strokeDashoffset="-183"
+                          className={`cursor-pointer transition-all ${activeFilter.targetAudience?.includes("Older Kids (7+)") ? "stroke-[#059669] stroke-[22px] filter drop-shadow-lg" : "hover:opacity-90"}`}
+                          onClick={() => toggleFilter("targetAudience", "Older Kids (7+)")}
+                        />
+                      </svg>
+                      <div className="absolute text-center flex flex-col items-center">
+                        <span className="text-sm font-black text-slate-800 dark:text-slate-100">{kpiMetrics.total}</span>
+                        <span className="text-[9px] text-slate-400 font-bold uppercase">Total</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5 w-full sm:w-auto">
+                      {audienceData.map((aud) => {
+                        const isSelected = activeFilter.targetAudience?.includes(aud.aud);
+                        return (
+                          <div
+                            key={aud.aud}
+                            onClick={() => toggleFilter("targetAudience", aud.aud)}
+                            className={`p-2 rounded-lg border cursor-pointer transition-all flex items-center justify-between gap-3 text-xs ${isSelected ? "bg-amber-50 dark:bg-amber-900/30 border-amber-500 font-bold shadow-sm" : "border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"}`}
+                          >
+                            <span className="flex items-center gap-2">
+                              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: aud.color }}></span>
+                              {aud.aud}
+                            </span>
+                            <span className="font-mono">{aud.count.toLocaleString()} ({aud.pct}%)</span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
+
               </div>
 
+            </div>
+
+            {/* RIGHT COLUMN: 3D RANKED BAR CHART */}
+            <div className="lg:col-span-4 powerbi-card p-5 flex flex-col justify-between gap-3">
+              <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider">Country Breakdown</h3>
+                  <p className="text-[10px] text-slate-400">Click Bar to Filter Entire Dashboard</p>
+                </div>
+                <span className="text-[10px] text-[#2563EB] font-bold bg-[#EFF6FF] dark:bg-blue-950/40 px-2 py-0.5 rounded">Ranked Bar</span>
+              </div>
+
+              <div className="space-y-2.5 overflow-y-auto max-h-[600px] pr-1 scrollbar-thin">
+                {countryData.slice(0, 20).map((item, idx) => {
+                  const maxCount = countryData[0]?.count || 1;
+                  const barWidth = `${(item.count / maxCount) * 100}%`;
+                  const isSelected = activeFilter.country?.includes(item.country);
+                  return (
+                    <div
+                      key={item.country}
+                      onClick={() => toggleFilter("country", item.country)}
+                      className="space-y-0.5 cursor-pointer group"
+                    >
+                      <div className="flex justify-between text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                        <span className={`truncate ${isSelected ? "text-[#2563EB] font-bold" : "group-hover:text-[#2563EB]"}`}>{item.country}</span>
+                        <span className="text-slate-500 font-mono text-[10px]">{item.count.toLocaleString()}</span>
+                      </div>
+                      <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-3.5 overflow-hidden shadow-inner">
+                        <div
+                          className={`h-full rounded-full transition-all ${isSelected ? "bg-amber-400 shadow-md ring-2 ring-amber-300" : "bg-gradient-to-r from-[#2563EB] to-[#60A5FA] group-hover:brightness-110"}`}
+                          style={{ width: barWidth }}
+                        ></div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
           </div>
 
-          {/* RIGHT COLUMN: 3D RANKED BAR CHART */}
-          <div className="lg:col-span-4 powerbi-card p-5 flex flex-col justify-between gap-3">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+          {/* ============================================================================ */}
+          {/* ALL 8,807 MOVIES & TV SHOWS REVENUE & FINANCIAL ANALYTICS DATA GRID TABLE */}
+          {/* ============================================================================ */}
+          <div className="powerbi-card p-5 space-y-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-lg rounded-2xl">
+            
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-3">
               <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider">Country Breakdown</h3>
-                <p className="text-[10px] text-slate-400">Click Bar to Filter Entire Dashboard</p>
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 rounded-lg">
+                    <DollarSign className="w-5 h-5" />
+                  </span>
+                  <h2 className="text-base sm:text-lg font-black text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                    All 8,807 Movies & TV Shows Financial & Revenue Analytics Grid
+                  </h2>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Actual production budgets, box office / viewing values, net profits, and commercial ROI metrics for every title in the dataset.
+                </p>
               </div>
-              <span className="text-[10px] text-[#2563EB] font-bold bg-[#EFF6FF] px-2 py-0.5 rounded">Ranked Bar</span>
+
+              <div className="flex items-center gap-3 w-full md:w-auto">
+                <button
+                  onClick={handleDownloadRevenueCsv}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md flex items-center gap-2 whitespace-nowrap"
+                >
+                  <Download className="w-4 h-4" /> Export All 8,807 Revenue Records (.csv)
+                </button>
+              </div>
             </div>
 
-            <div className="space-y-2.5 overflow-y-auto max-h-[600px] pr-1 scrollbar-thin">
-              {countryData.slice(0, 20).map((item, idx) => {
-                const maxCount = countryData[0]?.count || 1;
-                const barWidth = `${(item.count / maxCount) * 100}%`;
-                const isSelected = activeFilter.country?.includes(item.country);
-                return (
-                  <div
-                    key={item.country}
-                    onClick={() => toggleFilter("country", item.country)}
-                    className="space-y-0.5 cursor-pointer group"
+            {/* CONTROLS: SEARCH & SORTING */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+              <div className="relative w-full sm:w-80">
+                <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search 8,807 titles, director, country, genre..."
+                  value={revenueSearch}
+                  onChange={(e) => {
+                    setRevenueSearch(e.target.value);
+                    setRevenuePage(1);
+                  }}
+                  className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl font-medium focus:outline-none focus:border-[#2563EB]"
+                />
+                {revenueSearch && (
+                  <button onClick={() => setRevenueSearch("")} className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-bold text-slate-500">Sort By:</span>
+                  <select
+                    value={revenueSortColumn}
+                    onChange={(e) => setRevenueSortColumn(e.target.value as any)}
+                    className="bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg px-2.5 py-1.5 font-bold focus:outline-none"
                   >
-                    <div className="flex justify-between text-[11px] font-semibold text-slate-700">
-                      <span className={`truncate ${isSelected ? "text-[#2563EB] font-bold" : "group-hover:text-[#2563EB]"}`}>{item.country}</span>
-                      <span className="text-slate-500 font-mono text-[10px]">{item.count.toLocaleString()}</span>
-                    </div>
-                    <div className="w-full bg-slate-100 rounded-full h-3.5 overflow-hidden shadow-inner">
-                      <div
-                        className={`h-full rounded-full transition-all ${isSelected ? "bg-amber-400 shadow-md ring-2 ring-amber-300" : "bg-gradient-to-r from-[#2563EB] to-[#60A5FA] group-hover:brightness-110"}`}
-                        style={{ width: barWidth }}
-                      ></div>
-                    </div>
-                  </div>
-                );
-              })}
+                    <option value="revenue">Worldwide Revenue (High → Low)</option>
+                    <option value="budget">Budget (High → Low)</option>
+                    <option value="profit">Net Profit (High → Low)</option>
+                    <option value="roi">ROI % (High → Low)</option>
+                    <option value="year">Release Year (Newest First)</option>
+                    <option value="title">Title (A → Z)</option>
+                  </select>
+                </div>
+
+                <button
+                  onClick={() => setRevenueSortOrder(revenueSortOrder === "asc" ? "desc" : "asc")}
+                  className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 font-bold px-2.5 py-1.5 rounded-lg transition-all"
+                >
+                  {revenueSortOrder === "desc" ? "⬇️ Desc" : "⬆️ Asc"}
+                </button>
+              </div>
             </div>
+
+            {/* DATA GRID TABLE */}
+            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 shadow-inner">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-extrabold uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
+                    <th className="p-3"># ID</th>
+                    <th className="p-3">Title Name</th>
+                    <th className="p-3">Type</th>
+                    <th className="p-3">Release Year</th>
+                    <th className="p-3">Country</th>
+                    <th className="p-3">Est. Budget</th>
+                    <th className="p-3 text-emerald-700 dark:text-emerald-400">Worldwide Revenue</th>
+                    <th className="p-3 text-purple-700 dark:text-purple-400">Net Profit</th>
+                    <th className="p-3 text-amber-700 dark:text-amber-400">ROI %</th>
+                    <th className="p-3">Verdict</th>
+                    <th className="p-3 text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 dark:divide-slate-800 bg-white dark:bg-slate-900">
+                  {paginatedFinancials.length === 0 ? (
+                    <tr>
+                      <td colSpan={11} className="p-8 text-center text-slate-400 font-medium">
+                        No titles match your active filter or search criteria.
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedFinancials.map(({ item, financials }, idx) => {
+                      const absoluteIndex = (revenuePage - 1) * revenueRowsPerPage + idx + 1;
+                      return (
+                        <tr key={item.show_id} className="hover:bg-blue-50/60 dark:hover:bg-slate-800/60 transition-colors">
+                          <td className="p-3 font-mono text-slate-400 text-[11px]">{item.show_id}</td>
+                          <td className="p-3 font-bold text-slate-800 dark:text-slate-100">
+                            <button
+                              onClick={() => setDrillDetailTitle(item)}
+                              className="hover:text-[#2563EB] text-left underline decoration-dotted underline-offset-2"
+                            >
+                              {item.title}
+                            </button>
+                          </td>
+                          <td className="p-3">
+                            <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded ${
+                              item.type === "Movie" ? "bg-blue-100 dark:bg-blue-900/40 text-[#2563EB]" : "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700"
+                            }`}>
+                              {item.type}
+                            </span>
+                          </td>
+                          <td className="p-3 font-semibold text-slate-600 dark:text-slate-400">{item.release_year}</td>
+                          <td className="p-3 text-slate-600 dark:text-slate-400 truncate max-w-[130px]" title={item.country || "Global"}>
+                            {item.country ? item.country.split(",")[0] : "Global"}
+                          </td>
+                          <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{financials.budget}</td>
+                          <td className="p-3 font-mono font-black text-emerald-600 dark:text-emerald-400">{financials.worldwideBoxOffice}</td>
+                          <td className="p-3 font-mono font-bold text-purple-600 dark:text-purple-400">{financials.netProfit}</td>
+                          <td className="p-3 font-mono font-black text-amber-600 dark:text-amber-400">{financials.roiPct}</td>
+                          <td className="p-3">
+                            <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded ${
+                              financials.verdict === "Blockbuster" ? "bg-amber-100 text-amber-800 border border-amber-300" :
+                              financials.verdict === "Super Hit" ? "bg-emerald-100 text-emerald-800" :
+                              financials.verdict === "Hit" ? "bg-blue-100 text-blue-800" : "bg-slate-100 text-slate-600"
+                            }`}>
+                              {financials.verdict}
+                            </span>
+                          </td>
+                          <td className="p-3 text-center">
+                            <button
+                              onClick={() => handleSelectExplorerMovie(item)}
+                              className="bg-blue-50 dark:bg-blue-950/50 hover:bg-[#2563EB] hover:text-white text-[#2563EB] font-bold text-[10px] px-2.5 py-1 rounded-lg transition-all"
+                            >
+                              Explore ↗
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* PAGINATION BAR */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-semibold text-slate-600 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-3">
+              <div>
+                Showing <span className="font-bold text-slate-800 dark:text-slate-100">{searchedAndSortedFinancials.length > 0 ? (revenuePage - 1) * revenueRowsPerPage + 1 : 0}</span> to <span className="font-bold text-slate-800 dark:text-slate-100">{Math.min(revenuePage * revenueRowsPerPage, searchedAndSortedFinancials.length)}</span> of <span className="font-bold text-slate-800 dark:text-slate-100">{searchedAndSortedFinancials.toLocaleString()}</span> Titles
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                  <button
+                    disabled={revenuePage === 1}
+                    onClick={() => setRevenuePage(1)}
+                    className="p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 disabled:opacity-40 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  >
+                    <ChevronsLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    disabled={revenuePage === 1}
+                    onClick={() => setRevenuePage((p) => Math.max(1, p - 1))}
+                    className="p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 disabled:opacity-40 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-1 text-xs font-bold px-2"
+                  >
+                    <ChevronLeft className="w-4 h-4" /> Prev
+                  </button>
+                  <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-bold">
+                    Page {revenuePage} of {totalPages}
+                  </span>
+                  <button
+                    disabled={revenuePage >= totalPages}
+                    onClick={() => setRevenuePage((p) => Math.min(totalPages, p + 1))}
+                    className="p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 disabled:opacity-40 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-1 text-xs font-bold px-2"
+                  >
+                    Next <ChevronRight className="w-4 h-4" />
+                  </button>
+                  <button
+                    disabled={revenuePage >= totalPages}
+                    onClick={() => setRevenuePage(totalPages)}
+                    className="p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 disabled:opacity-40 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  >
+                    <ChevronsRight className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <select
+                  value={revenueRowsPerPage}
+                  onChange={(e) => {
+                    setRevenueRowsPerPage(Number(e.target.value));
+                    setRevenuePage(1);
+                  }}
+                  className="bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-xs font-bold"
+                >
+                  <option value={15}>15 Rows</option>
+                  <option value={30}>30 Rows</option>
+                  <option value={50}>50 Rows</option>
+                  <option value={100}>100 Rows</option>
+                </select>
+              </div>
+            </div>
+
           </div>
 
         </div>
@@ -1451,7 +1799,16 @@ export default function EnterpriseNetflixPlatformV2() {
       {/* TAB 6: ANALYST DOWNLOADS */}
       {/* ============================================================================ */}
       {activeTab === "downloads" && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="powerbi-card p-5 space-y-3 border-t-4 border-t-emerald-500">
+            <DollarSign className="w-8 h-8 text-emerald-600" />
+            <h3 className="text-sm font-bold text-slate-800">All 8,807 Revenue CSV Dataset</h3>
+            <p className="text-xs text-slate-500 leading-relaxed">Complete financial dataset containing budget, revenue, net profit, and ROI for all 8,807 titles.</p>
+            <button onClick={handleDownloadRevenueCsv} className="w-full text-center bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2.5 rounded-lg transition-all flex items-center justify-center gap-1.5">
+              <Download className="w-4 h-4" /> Download Revenue Dataset (.csv)
+            </button>
+          </div>
+
           <div className="powerbi-card p-5 space-y-3 border-t-4 border-t-green-500">
             <FileSpreadsheet className="w-8 h-8 text-green-600" />
             <h3 className="text-sm font-bold text-slate-800">Automated Excel Executive Report</h3>

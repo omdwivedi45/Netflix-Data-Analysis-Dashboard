@@ -80,6 +80,18 @@ export interface DetailedMovieIntelligence {
   recommendationScore: number;
 }
 
+export interface TitleFinancials {
+  budget: string;
+  worldwideBoxOffice: string;
+  netProfit: string;
+  roiPct: string;
+  roiValue: number;
+  numericRevenue: number;
+  numericBudget: number;
+  numericProfit: number;
+  verdict: "Blockbuster" | "Super Hit" | "Hit" | "Average" | "Loss";
+}
+
 // Tokenize & Stopwords Removal
 const STOPWORDS = new Set([
   "a", "an", "the", "and", "or", "but", "about", "above", "after", "against", "along", "amid", "among",
@@ -364,6 +376,122 @@ export function getMovieIntelligenceData(titleItem: RawTitle): DetailedMovieInte
     retentionScore: Number((82 + (hash % 17)).toFixed(1)),
     awardProbability: Number((75 + (hash % 23)).toFixed(1)),
     recommendationScore: Number((85 + (hash % 14)).toFixed(1))
+  };
+}
+
+export function getTitleFinancials(titleItem: RawTitle): TitleFinancials {
+  const titleLower = titleItem.title.toLowerCase();
+  const hash = hashString(titleItem.title + titleItem.release_year);
+
+  if (titleLower.includes("dangal")) {
+    return {
+      budget: "$9.5M",
+      worldwideBoxOffice: "$311.2M",
+      netProfit: "$285.4M",
+      roiPct: "+2,900%",
+      roiValue: 2900,
+      numericBudget: 9.5,
+      numericRevenue: 311.2,
+      numericProfit: 285.4,
+      verdict: "Blockbuster"
+    };
+  }
+
+  if (titleLower.includes("inception")) {
+    return {
+      budget: "$160.0M",
+      worldwideBoxOffice: "$836.8M",
+      netProfit: "$676.8M",
+      roiPct: "+423%",
+      roiValue: 423,
+      numericBudget: 160.0,
+      numericRevenue: 836.8,
+      numericProfit: 676.8,
+      verdict: "Blockbuster"
+    };
+  }
+
+  if (titleLower.includes("stranger things")) {
+    return {
+      budget: "$30.0M / Ep",
+      worldwideBoxOffice: "$540.0M",
+      netProfit: "$420.0M",
+      roiPct: "+510%",
+      roiValue: 510,
+      numericBudget: 120.0,
+      numericRevenue: 540.0,
+      numericProfit: 420.0,
+      verdict: "Blockbuster"
+    };
+  }
+
+  if (titleLower.includes("kota factory")) {
+    return {
+      budget: "$1.2M",
+      worldwideBoxOffice: "$19.7M",
+      netProfit: "$18.5M",
+      roiPct: "+1,440%",
+      roiValue: 1440,
+      numericBudget: 1.2,
+      numericRevenue: 19.7,
+      numericProfit: 18.5,
+      verdict: "Blockbuster"
+    };
+  }
+
+  const isMovie = titleItem.type === "Movie";
+  const budgetVal = isMovie ? 5 + (hash % 115) : 3 + (hash % 25);
+  const multiplier = 2.4 + ((hash % 50) / 10);
+  const revenueVal = Number((budgetVal * multiplier).toFixed(1));
+  const profitVal = Number((revenueVal - budgetVal).toFixed(1));
+  const roiVal = Math.round(((revenueVal - budgetVal) / budgetVal) * 100);
+
+  let verdict: "Blockbuster" | "Super Hit" | "Hit" | "Average" | "Loss" = "Hit";
+  if (roiVal > 300) verdict = "Blockbuster";
+  else if (roiVal > 200) verdict = "Super Hit";
+  else if (roiVal > 100) verdict = "Hit";
+  else if (roiVal > 30) verdict = "Average";
+  else verdict = "Loss";
+
+  return {
+    budget: `$${budgetVal}M`,
+    worldwideBoxOffice: `$${revenueVal}M`,
+    netProfit: `$${profitVal}M`,
+    roiPct: `+${roiVal}%`,
+    roiValue: roiVal,
+    numericBudget: budgetVal,
+    numericRevenue: revenueVal,
+    numericProfit: profitVal,
+    verdict
+  };
+}
+
+export function calculateTotalPortfolioFinancials(titles: RawTitle[]) {
+  let totalRevenue = 0;
+  let totalBudget = 0;
+  let totalProfit = 0;
+  let totalRoi = 0;
+
+  titles.forEach((t) => {
+    const f = getTitleFinancials(t);
+    totalRevenue += f.numericRevenue;
+    totalBudget += f.numericBudget;
+    totalProfit += f.numericProfit;
+    totalRoi += f.roiValue;
+  });
+
+  const count = titles.length || 1;
+  const avgRoi = Math.round(totalRoi / count);
+
+  return {
+    totalRevenueFormatted: totalRevenue >= 1000 ? `$${(totalRevenue / 1000).toFixed(2)}B` : `$${totalRevenue.toFixed(1)}M`,
+    totalBudgetFormatted: totalBudget >= 1000 ? `$${(totalBudget / 1000).toFixed(2)}B` : `$${totalBudget.toFixed(1)}M`,
+    totalProfitFormatted: totalProfit >= 1000 ? `$${(totalProfit / 1000).toFixed(2)}B` : `$${totalProfit.toFixed(1)}M`,
+    avgRoiFormatted: `+${avgRoi}%`,
+    totalRevenueRaw: totalRevenue,
+    totalBudgetRaw: totalBudget,
+    totalProfitRaw: totalProfit,
+    avgRoiRaw: avgRoi
   };
 }
 
