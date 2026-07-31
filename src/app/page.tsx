@@ -26,6 +26,7 @@ import {
   Info,
   ChevronRight,
   ChevronLeft,
+  ChevronDown,
   ChevronsLeft,
   ChevronsRight,
   Sliders,
@@ -108,10 +109,10 @@ export default function EnterpriseNetflixPlatformV2() {
   // Theme State
   const [isDarkMode, setIsDarkMode] = useState(false);
 
-  // Active Tab State (All existing tabs preserved)
+  // Active Tab State (Slicers ONLY on "bi" dashboard tab)
   const [activeTab, setActiveTab] = useState<"bi" | "ai" | "insights" | "explorer" | "sql" | "downloads">("bi");
 
-  // Power BI Global Cross-Filtering & Slicers State (Set / Array Multi-Select Checkboxes)
+  // Power BI Global Cross-Filtering & Slicers State (Dashboard Only)
   const [activeFilter, setActiveFilter] = useState<{
     type?: string[];
     country?: string[];
@@ -246,7 +247,7 @@ export default function EnterpriseNetflixPlatformV2() {
     return "Unrated / Other";
   };
 
-  // Dynamically Filtered Dataset based on Active Global Cross-Filters
+  // Dynamically Filtered Dataset based on Active Global Cross-Filters (Dashboard Tab Only)
   const filteredDataset = useMemo(() => {
     return ALL_NETFLIX_TITLES.filter((item) => {
       if (activeFilter.type && activeFilter.type.length > 0) {
@@ -614,209 +615,166 @@ export default function EnterpriseNetflixPlatformV2() {
       </div>
 
       {/* ============================================================================ */}
-      {/* TAB 1: EXECUTIVE 3D BI DASHBOARD (SLICERS EXCLUSIVELY ON THIS TAB) */}
+      {/* TAB 1: EXECUTIVE 3D BI DASHBOARD (POWER BI SLICERS EXCLUSIVELY ON THIS TAB) */}
       {/* ============================================================================ */}
       {activeTab === "bi" && (
         <div className="space-y-4">
 
-          {/* POWER BI INTERACTIVE CHECKBOX SLICERS & FILTERS PANEL (DASHBOARD ONLY) */}
-          <div className="powerbi-card p-4 space-y-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-2xl">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+          {/* POWER BI DESKTOP STYLE SLICERS (EMBEDDED IN DASHBOARD PAGE ONLY) */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-xl p-4 shadow-sm space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
               <div className="flex items-center gap-2">
-                <span className="p-1.5 bg-blue-50 dark:bg-blue-900/30 text-[#2563EB] rounded-lg">
-                  <Sliders className="w-4 h-4" />
-                </span>
-                <span className="text-xs font-black uppercase text-[#2563EB] tracking-wider">
-                  Power BI Checkbox Slicers (Dashboard Only)
+                <Filter className="w-4 h-4 text-[#2563EB]" />
+                <span className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-200">
+                  Power BI Checkbox Slicers
                 </span>
                 {Object.keys(activeFilter).length > 0 && (
-                  <span className="bg-[#2563EB] text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full">
-                    {Object.values(activeFilter).reduce((sum, arr) => sum + (arr ? arr.length : 0), 0)} Active
+                  <span className="bg-[#2563EB] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    {Object.values(activeFilter).reduce((sum, arr) => sum + (arr ? arr.length : 0), 0)} Filtered
                   </span>
                 )}
               </div>
               {Object.keys(activeFilter).length > 0 && (
-                <button onClick={clearAllFilters} className="text-xs font-bold text-red-600 hover:text-red-700 hover:underline flex items-center gap-1">
-                  <RefreshCw className="w-3.5 h-3.5" /> Clear All Slicers
+                <button
+                  onClick={clearAllFilters}
+                  className="text-xs font-bold text-red-600 hover:text-red-700 hover:underline flex items-center gap-1"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" /> Clear Slicers
                 </button>
               )}
             </div>
 
+            {/* POWER BI SLICER CARDS (EXACT LOOK MATCHING POWER BI DESKTOP SCREENSHOT) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-              {/* Content Type Checkbox Slicer */}
-              <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700/60 flex flex-col justify-between">
-                <div>
-                  <div className="flex justify-between items-center mb-1.5 border-b border-slate-200 dark:border-slate-700 pb-1">
-                    <span className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1">
-                      🎬 Content Type
-                    </span>
-                    {activeFilter.type && (
-                      <span className="text-[9px] font-bold text-[#2563EB] bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded">
-                        {activeFilter.type.length} selected
-                      </span>
-                    )}
-                  </div>
-                  <div className="space-y-1">
-                    {[
-                      { id: "Movie", label: "Movies", count: "6,131" },
-                      { id: "TV Show", label: "TV Series", count: "2,676" }
-                    ].map((item) => {
-                      const isChecked = activeFilter.type?.includes(item.id);
-                      return (
-                        <div
-                          key={item.id}
-                          onClick={() => toggleFilter("type", item.id)}
-                          className={`flex items-center justify-between p-1.5 rounded-lg border text-[11px] font-bold cursor-pointer transition-all ${
-                            isChecked
-                              ? "bg-[#2563EB] text-white border-[#2563EB] shadow-sm"
-                              : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-[#2563EB]"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-all ${
-                              isChecked ? "bg-white text-[#2563EB] border-white" : "bg-slate-100 dark:bg-slate-800 border-slate-400"
-                            }`}>
-                              {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                            </div>
-                            <span>{item.label}</span>
-                          </div>
-                          <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${
-                            isChecked ? "bg-blue-700 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-500"
-                          }`}>
-                            {item.count}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
+              
+              {/* SLICER 1: Content Type */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-3 shadow-xs space-y-2">
+                <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-1 font-extrabold text-slate-700 dark:text-slate-300 text-[11px]">
+                  <span>Content Type</span>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                </div>
+                <div className="space-y-1.5 pt-0.5">
+                  {[
+                    { id: "Movie", label: "Movie (6,131)" },
+                    { id: "TV Show", label: "TV Show (2,676)" }
+                  ].map((item) => {
+                    const isChecked = activeFilter.type?.includes(item.id);
+                    return (
+                      <label
+                        key={item.id}
+                        onClick={() => toggleFilter("type", item.id)}
+                        className={`flex items-center gap-2 cursor-pointer text-[11px] font-medium p-1 rounded transition-colors ${
+                          isChecked ? "bg-blue-50 dark:bg-blue-900/30 text-[#2563EB] font-bold" : "hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={!!isChecked}
+                          onChange={() => {}}
+                          className="w-3.5 h-3.5 rounded border-slate-300 text-[#2563EB] focus:ring-0 cursor-pointer"
+                        />
+                        <span>{item.label}</span>
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Demographic Rating Checkbox Slicer */}
-              <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700/60 flex flex-col justify-between">
-                <div>
-                  <div className="flex justify-between items-center mb-1.5 border-b border-slate-200 dark:border-slate-700 pb-1">
-                    <span className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1">
-                      🔞 Rating Group
-                    </span>
-                    {activeFilter.targetAudience && (
-                      <span className="text-[9px] font-bold text-[#2563EB] bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded">
-                        {activeFilter.targetAudience.length} selected
-                      </span>
-                    )}
-                  </div>
-                  <div className="space-y-1 max-h-36 overflow-y-auto pr-0.5 scrollbar-thin">
-                    {[
-                      "Adults (18+)",
-                      "Teens (13-14+)",
-                      "Older Kids (7+)",
-                      "Little Kids (All)"
-                    ].map((aud) => {
-                      const isChecked = activeFilter.targetAudience?.includes(aud);
-                      return (
-                        <div
-                          key={aud}
-                          onClick={() => toggleFilter("targetAudience", aud)}
-                          className={`flex items-center justify-between p-1.5 rounded-lg border text-[11px] font-bold cursor-pointer transition-all ${
-                            isChecked
-                              ? "bg-[#2563EB] text-white border-[#2563EB] shadow-sm"
-                              : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-[#2563EB]"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2 truncate">
-                            <div className={`w-3.5 h-3.5 rounded border flex flex-shrink-0 items-center justify-center transition-all ${
-                              isChecked ? "bg-white text-[#2563EB] border-white" : "bg-slate-100 dark:bg-slate-800 border-slate-400"
-                            }`}>
-                              {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                            </div>
-                            <span className="truncate">{aud}</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+              {/* SLICER 2: Rating Group */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-3 shadow-xs space-y-2">
+                <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-1 font-extrabold text-slate-700 dark:text-slate-300 text-[11px]">
+                  <span>Rating Group</span>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                </div>
+                <div className="space-y-1 max-h-28 overflow-y-auto pr-1 scrollbar-thin pt-0.5">
+                  {[
+                    "Adults (18+)",
+                    "Teens (13-14+)",
+                    "Older Kids (7+)",
+                    "Little Kids (All)"
+                  ].map((aud) => {
+                    const isChecked = activeFilter.targetAudience?.includes(aud);
+                    return (
+                      <label
+                        key={aud}
+                        onClick={() => toggleFilter("targetAudience", aud)}
+                        className={`flex items-center gap-2 cursor-pointer text-[11px] font-medium p-1 rounded transition-colors ${
+                          isChecked ? "bg-blue-50 dark:bg-blue-900/30 text-[#2563EB] font-bold" : "hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={!!isChecked}
+                          onChange={() => {}}
+                          className="w-3.5 h-3.5 rounded border-slate-300 text-[#2563EB] focus:ring-0 cursor-pointer"
+                        />
+                        <span className="truncate">{aud}</span>
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Genre Category Checkbox Slicer */}
-              <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700/60 flex flex-col justify-between">
-                <div>
-                  <div className="flex justify-between items-center mb-1.5 border-b border-slate-200 dark:border-slate-700 pb-1">
-                    <span className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1">
-                      🎭 Genre Category
-                    </span>
-                    {activeFilter.genre && (
-                      <span className="text-[9px] font-bold text-[#2563EB] bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded">
-                        {activeFilter.genre.length} selected
-                      </span>
-                    )}
-                  </div>
-                  <div className="space-y-1 max-h-36 overflow-y-auto pr-0.5 scrollbar-thin">
-                    {allGenresList.map((g) => {
-                      const isChecked = activeFilter.genre?.includes(g);
-                      return (
-                        <div
-                          key={g}
-                          onClick={() => toggleFilter("genre", g)}
-                          className={`flex items-center justify-between p-1.5 rounded-lg border text-[11px] font-bold cursor-pointer transition-all ${
-                            isChecked
-                              ? "bg-[#2563EB] text-white border-[#2563EB] shadow-sm"
-                              : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-[#2563EB]"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2 truncate">
-                            <div className={`w-3.5 h-3.5 rounded border flex flex-shrink-0 items-center justify-center transition-all ${
-                              isChecked ? "bg-white text-[#2563EB] border-white" : "bg-slate-100 dark:bg-slate-800 border-slate-400"
-                            }`}>
-                              {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                            </div>
-                            <span className="truncate">{g}</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+              {/* SLICER 3: Category / Genre */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-3 shadow-xs space-y-2">
+                <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-1 font-extrabold text-slate-700 dark:text-slate-300 text-[11px]">
+                  <span>Genre Category</span>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                </div>
+                <div className="space-y-1 max-h-28 overflow-y-auto pr-1 scrollbar-thin pt-0.5">
+                  {allGenresList.map((g) => {
+                    const isChecked = activeFilter.genre?.includes(g);
+                    return (
+                      <label
+                        key={g}
+                        onClick={() => toggleFilter("genre", g)}
+                        className={`flex items-center gap-2 cursor-pointer text-[11px] font-medium p-1 rounded transition-colors ${
+                          isChecked ? "bg-blue-50 dark:bg-blue-900/30 text-[#2563EB] font-bold" : "hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={!!isChecked}
+                          onChange={() => {}}
+                          className="w-3.5 h-3.5 rounded border-slate-300 text-[#2563EB] focus:ring-0 cursor-pointer"
+                        />
+                        <span className="truncate">{g}</span>
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Release Year Checkbox Slicer */}
-              <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700/60 flex flex-col justify-between">
-                <div>
-                  <div className="flex justify-between items-center mb-1.5 border-b border-slate-200 dark:border-slate-700 pb-1">
-                    <span className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1">
-                      📅 Release Year ({allYearsList.length} Years)
-                    </span>
-                    {activeFilter.releaseYear && (
-                      <span className="text-[9px] font-bold text-[#2563EB] bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded">
-                        {activeFilter.releaseYear.length} selected
-                      </span>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-3 gap-1 max-h-36 overflow-y-auto pr-0.5 scrollbar-thin">
-                    {allYearsList.map((y) => {
-                      const isChecked = activeFilter.releaseYear?.includes(y);
-                      return (
-                        <div
-                          key={y}
-                          onClick={() => toggleFilter("releaseYear", y)}
-                          className={`flex items-center justify-center gap-1 p-1 rounded border text-[10px] font-bold cursor-pointer transition-all ${
-                            isChecked
-                              ? "bg-[#2563EB] text-white border-[#2563EB] shadow-sm"
-                              : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-[#2563EB]"
-                          }`}
-                        >
-                          <div className={`w-3 h-3 rounded border flex items-center justify-center transition-all ${
-                            isChecked ? "bg-white text-[#2563EB] border-white" : "bg-slate-100 dark:bg-slate-800 border-slate-400"
-                          }`}>
-                            {isChecked && <Check className="w-2 h-2 stroke-[3]" />}
-                          </div>
-                          <span>{y}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
+              {/* SLICER 4: Release Year */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-3 shadow-xs space-y-2">
+                <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-1 font-extrabold text-slate-700 dark:text-slate-300 text-[11px]">
+                  <span>Release Year ({allYearsList.length} Yrs)</span>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                </div>
+                <div className="grid grid-cols-2 gap-1 max-h-28 overflow-y-auto pr-1 scrollbar-thin pt-0.5">
+                  {allYearsList.map((y) => {
+                    const isChecked = activeFilter.releaseYear?.includes(y);
+                    return (
+                      <label
+                        key={y}
+                        onClick={() => toggleFilter("releaseYear", y)}
+                        className={`flex items-center gap-1.5 cursor-pointer text-[10px] font-medium p-1 rounded transition-colors ${
+                          isChecked ? "bg-blue-50 dark:bg-blue-900/30 text-[#2563EB] font-bold" : "hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={!!isChecked}
+                          onChange={() => {}}
+                          className="w-3 h-3 rounded border-slate-300 text-[#2563EB] focus:ring-0 cursor-pointer"
+                        />
+                        <span>{y}</span>
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
+
             </div>
           </div>
 
@@ -1329,7 +1287,7 @@ export default function EnterpriseNetflixPlatformV2() {
       )}
 
       {/* ============================================================================ */}
-      {/* TAB 2: AI BUSINESS INSIGHTS */}
+      {/* TAB 2: AI BUSINESS INSIGHTS (NO SLICERS HERE) */}
       {/* ============================================================================ */}
       {activeTab === "insights" && (
         <div className="space-y-4">
@@ -1377,7 +1335,7 @@ export default function EnterpriseNetflixPlatformV2() {
       )}
 
       {/* ============================================================================ */}
-      {/* TAB 3: MOVIE INTELLIGENCE EXPLORER */}
+      {/* TAB 3: MOVIE INTELLIGENCE EXPLORER (NO SLICERS HERE) */}
       {/* ============================================================================ */}
       {activeTab === "explorer" && (
         <div className="space-y-4">
@@ -1622,7 +1580,7 @@ export default function EnterpriseNetflixPlatformV2() {
       )}
 
       {/* ============================================================================ */}
-      {/* TAB 4: FULL 8,807 AI RECOMMENDATION ENGINE */}
+      {/* TAB 4: FULL 8,807 AI RECOMMENDATION ENGINE (NO SLICERS HERE) */}
       {/* ============================================================================ */}
       {activeTab === "ai" && (
         <div className="space-y-6">
@@ -1716,7 +1674,7 @@ export default function EnterpriseNetflixPlatformV2() {
       )}
 
       {/* ============================================================================ */}
-      {/* TAB 5: LIVE SQL QUERY CONSOLE */}
+      {/* TAB 5: LIVE SQL QUERY CONSOLE (NO SLICERS HERE) */}
       {/* ============================================================================ */}
       {activeTab === "sql" && (
         <div className="space-y-4 powerbi-card p-6">
@@ -1796,7 +1754,7 @@ export default function EnterpriseNetflixPlatformV2() {
       )}
 
       {/* ============================================================================ */}
-      {/* TAB 6: ANALYST DOWNLOADS */}
+      {/* TAB 6: ANALYST DOWNLOADS (NO SLICERS HERE) */}
       {/* ============================================================================ */}
       {activeTab === "downloads" && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
